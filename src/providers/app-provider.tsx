@@ -277,6 +277,7 @@ export function AppProvider({ children }: PropsWithChildren) {
           metrics: payload.metrics,
           notes: payload.notes,
         };
+        const initiatingSession = stateRef.current.session;
 
         setState((current) => ({
           ...current,
@@ -287,8 +288,17 @@ export function AppProvider({ children }: PropsWithChildren) {
           try {
             setSyncStatus("syncing");
             await repository.saveWorkoutLog(entry, state.session);
+
+            if (stateRef.current.session !== initiatingSession) {
+              return;
+            }
+
             setSyncStatus("idle");
           } catch (error) {
+            if (stateRef.current.session !== initiatingSession) {
+              return;
+            }
+
             setSyncStatus("error");
             setSyncError(error instanceof Error ? error.message : "Workout sync failed.");
           }

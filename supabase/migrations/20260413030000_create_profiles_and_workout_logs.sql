@@ -33,8 +33,12 @@ create table if not exists public.workout_logs (
   session_id text not null,
   sport text not null check (sport in ('cycling', 'bjj', 'swimming', 'surfing')),
   completed_at timestamptz not null,
-  readiness jsonb not null,
-  metrics jsonb not null default '{}'::jsonb,
+  readiness jsonb not null
+    constraint workout_logs_readiness_is_object
+    check (jsonb_typeof(readiness) = 'object'),
+  metrics jsonb not null default '{}'::jsonb
+    constraint workout_logs_metrics_is_object
+    check (jsonb_typeof(metrics) = 'object'),
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

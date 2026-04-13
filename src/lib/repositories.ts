@@ -113,14 +113,26 @@ const supabaseRepository: AppDataRepository = {
     };
   },
   subscribeToAuthChanges(listener) {
+    let prevUserId: string | null = null;
+
     const {
       data: { subscription },
-    } = supabase!.auth.onAuthStateChange((_event, session) => {
+    } = supabase!.auth.onAuthStateChange((event, session) => {
+      if (event === "INITIAL_SESSION") {
+        return;
+      }
+
+      if (event === "TOKEN_REFRESHED" && session?.user?.id === prevUserId) {
+        return;
+      }
+
       if (!session?.user) {
+        prevUserId = null;
         listener(null);
         return;
       }
 
+      prevUserId = session.user.id;
       listener({
         userId: session.user.id,
         email: session.user.email ?? "",
