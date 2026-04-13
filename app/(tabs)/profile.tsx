@@ -66,7 +66,7 @@ export default function ProfileScreen() {
           <Text style={styles.cardTitle}>Sync status</Text>
           <Text style={styles.helper}>Mode: {repositoryMode}</Text>
           <Text style={styles.helper}>State: {syncStatus}</Text>
-          {syncError ? <Text style={styles.helper}>Latest error: {syncError}</Text> : null}
+          {syncError ? <Text style={styles.helper}>Sync failed, please try again.</Text> : null}
         </Card>
 
         <SecondaryButton label="Reset profile and start over" onPress={() => void resetAll()} />

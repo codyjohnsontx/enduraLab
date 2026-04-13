@@ -7,10 +7,7 @@ import {
   WorkoutLog,
 } from "@/types/domain";
 import { env } from "@/lib/env";
-import {
-  loadLocalPreviewSession,
-  persistLocalPreviewSession,
-} from "@/lib/storage";
+import { loadLocalPreviewSession, persistLocalPreviewSession } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 import {
   ProfileInsert,
@@ -19,16 +16,133 @@ import {
   WorkoutLogRow,
 } from "@/types/supabase";
 
+const sports = ["cycling", "bjj", "swimming", "surfing"] as const;
+const levels = ["foundation", "intermediate", "competitive"] as const;
+const goalFocuses = ["strength_to_weight", "endurance", "durability", "mobility"] as const;
+const readinessLevels = ["green", "yellow", "red"] as const;
+const trainingDays = [2, 3, 4] as const;
+
+function isEnumValue<T extends readonly string[]>(value: unknown, allowed: T): value is T[number] {
+  return typeof value === "string" && allowed.includes(value as T[number]);
+}
+
+function toFiniteNumber(value: unknown, fieldName: string): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid ${fieldName} value from repository.`);
+  }
+
+  return parsed;
+}
+
+function toOptionalFiniteNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === "") {
+    return undefined;
+  }
+
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseMetrics(value: unknown): WorkoutLog["metrics"] {
+  let raw = value;
+
+  if (typeof value === "string") {
+    try {
+      raw = JSON.parse(value);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown parse error";
+      throw new Error(
+        `Invalid workout metrics payload from repository: JSON parse error: ${message} (input type: string)`,
+      );
+    }
+  }
+
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("Invalid workout metrics payload from repository.");
+  }
+
+  const metrics = raw as Record<string, unknown>;
+
+  return {
+    durationMinutes: toOptionalFiniteNumber(metrics.durationMinutes),
+    perceivedEffort: toOptionalFiniteNumber(metrics.perceivedEffort),
+    distanceKm: toOptionalFiniteNumber(metrics.distanceKm),
+    elevationMeters: toOptionalFiniteNumber(metrics.elevationMeters),
+    averagePowerWatts: toOptionalFiniteNumber(metrics.averagePowerWatts),
+    roundsCompleted: toOptionalFiniteNumber(metrics.roundsCompleted),
+    sparringRounds: toOptionalFiniteNumber(metrics.sparringRounds),
+    swimDistanceMeters: toOptionalFiniteNumber(metrics.swimDistanceMeters),
+    intervalPacePer100m:
+      typeof metrics.intervalPacePer100m === "string" ? metrics.intervalPacePer100m : undefined,
+    waveCount: toOptionalFiniteNumber(metrics.waveCount),
+    bodyweightKg: toOptionalFiniteNumber(metrics.bodyweightKg),
+  };
+}
+
+function parseReadiness(value: unknown): WorkoutLog["readiness"] {
+  let raw = value;
+
+  if (typeof value === "string") {
+    try {
+      raw = JSON.parse(value);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown parse error";
+      throw new Error(
+        `Invalid readiness payload from repository: JSON parse error: ${message} (input type: string)`,
+      );
+    }
+  }
+
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("Invalid readiness payload from repository.");
+  }
+
+  const readiness = raw as Record<string, unknown>;
+
+  if (!isEnumValue(readiness.level, readinessLevels)) {
+    throw new Error("Invalid readiness level from repository.");
+  }
+
+  return {
+    sleepHours: toFiniteNumber(readiness.sleepHours, "sleepHours"),
+    soreness: toFiniteNumber(readiness.soreness, "soreness"),
+    energy: toFiniteNumber(readiness.energy, "energy"),
+    stress: toFiniteNumber(readiness.stress, "stress"),
+    pain: toFiniteNumber(readiness.pain, "pain"),
+    level: readiness.level,
+  };
+}
+
 function mapProfileRowToRemoteProfile(row: ProfileRow): RemoteProfile {
+  if (!isEnumValue(row.primary_sport, sports)) {
+    throw new Error("Invalid primary sport from repository.");
+  }
+
+  if (!isEnumValue(row.experience_level, levels)) {
+    throw new Error("Invalid experience level from repository.");
+  }
+
+  if (!isEnumValue(row.goal_focus, goalFocuses)) {
+    throw new Error("Invalid goal focus from repository.");
+  }
+
+  if (!trainingDays.includes(row.training_days)) {
+    throw new Error("Invalid training days from repository.");
+  }
+
+  const secondarySports = row.secondary_sports.filter((sport) => isEnumValue(sport, sports));
+
   return {
     userId: row.user_id,
     email: row.email,
     primarySport: row.primary_sport,
-    secondarySports: row.secondary_sports,
+    secondarySports,
     experienceLevel: row.experience_level,
     trainingDays: row.training_days,
     goalFocus: row.goal_focus,
-    bodyweightKg: row.bodyweight_kg,
+    bodyweightKg: toFiniteNumber(row.bodyweight_kg, "bodyweight_kg"),
     bjjWeightClass: row.bjj_weight_class ?? undefined,
     injuryNotes: row.injury_notes ?? undefined,
     updatedAt: row.updated_at ?? new Date().toISOString(),
@@ -36,14 +150,18 @@ function mapProfileRowToRemoteProfile(row: ProfileRow): RemoteProfile {
 }
 
 function mapWorkoutRowToRemoteWorkoutLog(row: WorkoutLogRow): RemoteWorkoutLog {
+  if (!isEnumValue(row.sport, sports)) {
+    throw new Error("Invalid workout sport from repository.");
+  }
+
   return {
     id: row.id,
     sessionId: row.session_id,
     userId: row.user_id,
     sport: row.sport,
     completedAt: row.completed_at,
-    readiness: row.readiness,
-    metrics: row.metrics,
+    readiness: parseReadiness(row.readiness),
+    metrics: parseMetrics(row.metrics),
     notes: row.notes ?? undefined,
     updatedAt: row.updated_at ?? new Date().toISOString(),
   };
@@ -99,7 +217,13 @@ const supabaseRepository: AppDataRepository = {
   mode: "supabase",
   isConfigured: true,
   async getSession() {
-    const { data } = await supabase!.auth.getSession();
+    const { data, error } = await supabase!.auth.getSession();
+
+    if (error) {
+      console.error("Supabase getSession failed", error);
+      return null;
+    }
+
     const session = data.session;
 
     if (!session?.user) {
@@ -145,12 +269,17 @@ const supabaseRepository: AppDataRepository = {
     };
   },
   async signInWithMagicLink(email: string) {
-    await supabase!.auth.signInWithOtp({
+    const { error } = await supabase!.auth.signInWithOtp({
       email,
       options: {
         emailRedirectTo: "enduralab://",
       },
     });
+
+    if (error) {
+      console.error("Supabase signInWithMagicLink failed", error);
+      throw new Error(error.message);
+    }
 
     return { mode: "supabase", sent: true };
   },
@@ -163,7 +292,12 @@ const supabaseRepository: AppDataRepository = {
     return fallbackSession;
   },
   async signOut() {
-    await supabase!.auth.signOut();
+    const { error } = await supabase!.auth.signOut();
+
+    if (error) {
+      console.error("Supabase signOut failed", error);
+      throw new Error(error.message);
+    }
   },
   async loadProfile(userId: string) {
     const { data, error } = await supabase!

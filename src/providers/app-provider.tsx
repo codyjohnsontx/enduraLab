@@ -66,6 +66,12 @@ export function AppProvider({ children }: PropsWithChildren) {
   }, [state]);
 
   useEffect(() => {
+    if (syncError) {
+      console.error("Endura Lab sync error", syncError);
+    }
+  }, [syncError]);
+
+  useEffect(() => {
     let active = true;
 
     const isCurrentSync = (token: number) => active && syncCounterRef.current === token;
@@ -165,7 +171,7 @@ export function AppProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      setState((current) => ({
+      setState(() => ({
         ...defaultAppState,
         session,
       }));
@@ -254,6 +260,7 @@ export function AppProvider({ children }: PropsWithChildren) {
 
             setSyncStatus("error");
             setSyncError(error instanceof Error ? error.message : "Profile sync failed.");
+            throw error;
           }
         }
 
@@ -295,12 +302,18 @@ export function AppProvider({ children }: PropsWithChildren) {
 
             setSyncStatus("idle");
           } catch (error) {
+            setState((current) => ({
+              ...current,
+              workoutLogs: current.workoutLogs.filter((item) => item.id !== entry.id),
+            }));
+
             if (stateRef.current.session !== initiatingSession) {
               return;
             }
 
             setSyncStatus("error");
             setSyncError(error instanceof Error ? error.message : "Workout sync failed.");
+            throw error;
           }
         }
       },
