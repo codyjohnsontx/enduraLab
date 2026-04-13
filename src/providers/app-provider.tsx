@@ -205,8 +205,6 @@ export function AppProvider({ children }: PropsWithChildren) {
           metrics: payload.metrics,
           notes: payload.notes,
         };
-        const previousLogs = state.workoutLogs;
-
         setState((current) => ({
           ...current,
           workoutLogs: [entry, ...current.workoutLogs],
@@ -220,7 +218,7 @@ export function AppProvider({ children }: PropsWithChildren) {
           } catch (error) {
             setState((current) => ({
               ...current,
-              workoutLogs: previousLogs,
+              workoutLogs: current.workoutLogs.filter((item) => item.id !== entry.id),
             }));
             setSyncStatus("error");
             setSyncError(error instanceof Error ? error.message : "Workout sync failed.");

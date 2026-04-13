@@ -43,7 +43,18 @@ function toOptionalFiniteNumber(value: unknown): number | undefined {
 }
 
 function parseMetrics(value: unknown): WorkoutLog["metrics"] {
-  const raw = typeof value === "string" ? JSON.parse(value) : value;
+  let raw = value;
+
+  if (typeof value === "string") {
+    try {
+      raw = JSON.parse(value);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown parse error";
+      throw new Error(
+        `Invalid workout metrics payload from repository: JSON parse error: ${message} (input type: string)`,
+      );
+    }
+  }
 
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("Invalid workout metrics payload from repository.");
@@ -68,7 +79,18 @@ function parseMetrics(value: unknown): WorkoutLog["metrics"] {
 }
 
 function parseReadiness(value: unknown): WorkoutLog["readiness"] {
-  const raw = typeof value === "string" ? JSON.parse(value) : value;
+  let raw = value;
+
+  if (typeof value === "string") {
+    try {
+      raw = JSON.parse(value);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown parse error";
+      throw new Error(
+        `Invalid readiness payload from repository: JSON parse error: ${message} (input type: string)`,
+      );
+    }
+  }
 
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("Invalid readiness payload from repository.");

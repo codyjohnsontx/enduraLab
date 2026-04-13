@@ -96,7 +96,7 @@ export default function WorkoutSessionScreen() {
     );
   }
 
-  if (authReady && !authSession) {
+  if (!authSession) {
     return <Redirect href="/auth" />;
   }
 
