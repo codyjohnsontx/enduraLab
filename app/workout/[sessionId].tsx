@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Control, Controller, useForm } from "react-hook-form";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 
 import {
@@ -43,31 +44,79 @@ type FormValues = z.infer<typeof schema>;
 
 export default function WorkoutSessionScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
-  const { profile, logWorkout } = useAppState();
+  const { authReady, session: authSession, profile, logWorkout } = useAppState();
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const { data: plan } = useQuery({
     queryKey: ["plan", profile?.primarySport, profile?.trainingDays],
     queryFn: () => fetchPlanForProfile(profile!),
     enabled: Boolean(profile),
   });
 
-  const session = plan?.sessions.find((item) => item.id === sessionId);
+  const trainingSession = plan?.sessions.find((item) => item.id === sessionId);
 
-  const { control, handleSubmit, watch } = useForm<FormValues>({
+  const { control, getValues, handleSubmit, reset, watch } = useForm<FormValues>({
     defaultValues: {
       sleepHours: 7,
       soreness: 2,
       energy: 4,
       stress: 2,
       pain: 1,
-      durationMinutes: session?.durationMinutes ?? 45,
+      durationMinutes: trainingSession?.durationMinutes ?? 45,
       perceivedEffort: 7,
       notes: "",
       bodyweightKg: profile?.bodyweightKg,
     },
   });
 
-  if (!profile || !session) {
+  useEffect(() => {
+    if (!trainingSession) {
+      return;
+    }
+
+    reset({
+      ...getValues(),
+      durationMinutes: trainingSession.durationMinutes,
+      bodyweightKg: profile?.bodyweightKg,
+    }, { keepDirtyValues: true });
+  }, [getValues, profile?.bodyweightKg, reset, trainingSession]);
+
+  if (!authReady) {
+    return (
+      <Screen>
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <ActivityIndicator color={colors.primaryDark} size="large" />
+        </View>
+      </Screen>
+    );
+  }
+
+  if (!authSession) {
+    return <Redirect href="/auth" />;
+  }
+
+  if (!profile) {
     return <Screen />;
+  }
+
+  if (!trainingSession) {
+    return (
+      <Screen>
+        <View style={styles.notFoundWrap}>
+          <SectionTitle
+            eyebrow="Workout"
+            title="Session not found"
+            subtitle="This workout link is stale or no longer matches your active plan."
+          />
+          <PrimaryButton label="Back to today" onPress={() => router.replace("/(tabs)")} />
+        </View>
+      </Screen>
+    );
   }
 
   const readiness = evaluateReadiness({
@@ -78,36 +127,42 @@ export default function WorkoutSessionScreen() {
     pain: Number(watch("pain")),
   });
 
-  const submit = handleSubmit((values) => {
+  const submit = handleSubmit(async (values) => {
     const parsed = schema.parse(values);
+    setSubmitError(null);
 
-    logWorkout({
-      sessionId: session.id,
-      sport: session.sport,
-      readiness: {
-        sleepHours: parsed.sleepHours,
-        soreness: parsed.soreness,
-        energy: parsed.energy,
-        stress: parsed.stress,
-        pain: parsed.pain,
-        level: readiness.level,
-      },
-      metrics: {
-        durationMinutes: parsed.durationMinutes,
-        perceivedEffort: parsed.perceivedEffort,
-        distanceKm: parsed.distanceKm,
-        averagePowerWatts: parsed.averagePowerWatts,
-        roundsCompleted: parsed.roundsCompleted,
-        sparringRounds: parsed.sparringRounds,
-        swimDistanceMeters: parsed.swimDistanceMeters,
-        intervalPacePer100m: parsed.intervalPacePer100m,
-        waveCount: parsed.waveCount,
-        bodyweightKg: parsed.bodyweightKg,
-      },
-      notes: parsed.notes,
-    });
+    try {
+      await logWorkout({
+        sessionId: trainingSession.id,
+        sport: trainingSession.sport,
+        readiness: {
+          sleepHours: parsed.sleepHours,
+          soreness: parsed.soreness,
+          energy: parsed.energy,
+          stress: parsed.stress,
+          pain: parsed.pain,
+          level: readiness.level,
+        },
+        metrics: {
+          durationMinutes: parsed.durationMinutes,
+          perceivedEffort: parsed.perceivedEffort,
+          distanceKm: parsed.distanceKm,
+          averagePowerWatts: parsed.averagePowerWatts,
+          roundsCompleted: parsed.roundsCompleted,
+          sparringRounds: parsed.sparringRounds,
+          swimDistanceMeters: parsed.swimDistanceMeters,
+          intervalPacePer100m: parsed.intervalPacePer100m,
+          waveCount: parsed.waveCount,
+          bodyweightKg: parsed.bodyweightKg,
+        },
+        notes: parsed.notes,
+      });
 
-    router.replace("/(tabs)");
+      router.replace("/(tabs)");
+    } catch (error) {
+      console.error("Workout logging failed", error);
+      setSubmitError("Workout could not be saved. Please try again.");
+    }
   });
 
   return (
@@ -116,9 +171,9 @@ export default function WorkoutSessionScreen() {
         <FadeInView delay={40}>
           <View style={styles.header}>
             <SectionTitle
-              eyebrow={`Week ${session.week} · Day ${session.dayIndex}`}
-              title={session.title}
-              subtitle={`${session.durationMinutes} min · ${session.emphasis.join(" · ")}`}
+              eyebrow={`Week ${trainingSession.week} · Day ${trainingSession.dayIndex}`}
+              title={trainingSession.title}
+              subtitle={`${trainingSession.durationMinutes} min · ${trainingSession.emphasis.join(" · ")}`}
             />
           </View>
         </FadeInView>
@@ -132,7 +187,7 @@ export default function WorkoutSessionScreen() {
               </View>
               <View style={styles.playerStat}>
                 <Text style={styles.playerLabel}>Planned duration</Text>
-                <Text style={styles.playerValue}>{session.durationMinutes}m</Text>
+                <Text style={styles.playerValue}>{trainingSession.durationMinutes}m</Text>
               </View>
               <ReadinessPill level={readiness.level} />
             </View>
@@ -140,7 +195,7 @@ export default function WorkoutSessionScreen() {
               <View style={styles.progressFill} />
             </View>
             <Text style={styles.helper}>{readiness.recommendation}</Text>
-            <Text style={styles.helper}>{session.recommendation}</Text>
+            <Text style={styles.helper}>{trainingSession.recommendation}</Text>
           </Card>
         </FadeInView>
 
@@ -150,7 +205,7 @@ export default function WorkoutSessionScreen() {
             {(["warmup", "main", "accessory", "mobility", "cooldown"] as const).map((block) => (
               <View key={block} style={styles.blockWrap}>
                 <Text style={styles.blockTitle}>{block}</Text>
-                {session.blocks[block].map((exercise) => (
+                {trainingSession.blocks[block].map((exercise) => (
                   <View key={`${block}-${exercise.name}`} style={styles.exerciseWrap}>
                     <ListRow
                       title={exercise.name}
@@ -186,6 +241,7 @@ export default function WorkoutSessionScreen() {
               <Text style={styles.cardTitle}>Log session</Text>
               <Text style={styles.caption}>After training</Text>
             </View>
+            {submitError ? <Text style={styles.errorText}>{submitError}</Text> : null}
             <Controller
               control={control}
               name="durationMinutes"
@@ -379,6 +435,11 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: spacing.sm,
   },
+  notFoundWrap: {
+    flex: 1,
+    justifyContent: "center",
+    gap: spacing.lg,
+  },
   playerCard: {
     gap: spacing.md,
     paddingTop: spacing.lg,
@@ -442,6 +503,11 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
     fontSize: 13,
+  },
+  errorText: {
+    color: colors.danger,
+    fontSize: 13,
+    lineHeight: 20,
   },
   blockWrap: {
     gap: 8,

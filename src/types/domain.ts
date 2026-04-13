@@ -10,6 +10,10 @@ export type ExperienceLevel = "foundation" | "intermediate" | "competitive";
 
 export type ReadinessLevel = "green" | "yellow" | "red";
 
+export type RepositoryMode = "supabase" | "local-preview";
+
+export type SyncStatus = "idle" | "syncing" | "error";
+
 export type AthleteProfile = {
   email: string;
   primarySport: Sport;
@@ -89,8 +93,38 @@ export type WorkoutLog = {
   notes?: string;
 };
 
+export type AuthSession = {
+  userId: string;
+  email: string;
+  source: RepositoryMode;
+};
+
+export type RemoteProfile = AthleteProfile & {
+  userId: string;
+  updatedAt: string;
+};
+
+export type RemoteWorkoutLog = WorkoutLog & {
+  userId: string;
+  updatedAt: string;
+};
+
 export type AppState = {
+  session: AuthSession | null;
   profile: AthleteProfile | null;
   workoutLogs: WorkoutLog[];
   onboardingCompleted: boolean;
+};
+
+export type AppDataRepository = {
+  mode: RepositoryMode;
+  isConfigured: boolean;
+  getSession: () => Promise<AuthSession | null>;
+  signInWithMagicLink: (email: string) => Promise<{ mode: RepositoryMode; sent: boolean }>;
+  startLocalPreviewSession: (email: string) => Promise<AuthSession>;
+  signOut: () => Promise<void>;
+  loadProfile: (userId: string) => Promise<RemoteProfile | null>;
+  saveProfile: (profile: AthleteProfile, session: AuthSession) => Promise<RemoteProfile>;
+  loadWorkoutLogs: (userId: string) => Promise<RemoteWorkoutLog[]>;
+  saveWorkoutLog: (workoutLog: WorkoutLog, session: AuthSession) => Promise<RemoteWorkoutLog>;
 };

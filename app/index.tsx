@@ -5,9 +5,9 @@ import { colors } from "@/constants/theme";
 import { useAppState } from "@/providers/app-provider";
 
 export default function IndexScreen() {
-  const { hydrated, onboardingCompleted } = useAppState();
+  const { hydrated, authReady, session, onboardingCompleted } = useAppState();
 
-  if (!hydrated) {
+  if (!hydrated || !authReady) {
     return (
       <View
         style={{
@@ -20,6 +20,10 @@ export default function IndexScreen() {
         <ActivityIndicator color={colors.primaryDark} size="large" />
       </View>
     );
+  }
+
+  if (!session) {
+    return <Redirect href="/auth" />;
   }
 
   return <Redirect href={onboardingCompleted ? "/(tabs)" : "/onboarding"} />;

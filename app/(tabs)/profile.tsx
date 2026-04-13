@@ -12,7 +12,7 @@ import { colors, spacing } from "@/constants/theme";
 import { useAppState } from "@/providers/app-provider";
 
 export default function ProfileScreen() {
-  const { profile, resetAll } = useAppState();
+  const { profile, repositoryMode, syncStatus, syncError, resetAll, signOut } = useAppState();
 
   if (!profile) {
     return <Screen />;
@@ -24,7 +24,7 @@ export default function ProfileScreen() {
         <SectionTitle
           eyebrow="Profile"
           title="Endura Lab settings"
-          subtitle="This MVP stores your plan and logs on-device first, with the data model ready for account sync next."
+          subtitle="Auth and sync scaffolding are in place. Local preview remains available until the live Supabase project is connected."
         />
 
         <Card style={styles.card}>
@@ -62,7 +62,15 @@ export default function ProfileScreen() {
           </Text>
         </Card>
 
-        <SecondaryButton label="Reset profile and start over" onPress={resetAll} />
+        <Card style={styles.card}>
+          <Text style={styles.cardTitle}>Sync status</Text>
+          <Text style={styles.helper}>Mode: {repositoryMode}</Text>
+          <Text style={styles.helper}>State: {syncStatus}</Text>
+          {syncError ? <Text style={styles.helper}>Sync failed, please try again.</Text> : null}
+        </Card>
+
+        <SecondaryButton label="Reset profile and start over" onPress={() => void resetAll()} />
+        <SecondaryButton label="Sign out" onPress={() => void signOut()} />
       </ScrollView>
     </Screen>
   );
