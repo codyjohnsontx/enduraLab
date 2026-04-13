@@ -1,5 +1,6 @@
 import { Redirect, router } from "expo-router";
 import { Controller, useForm } from "react-hook-form";
+import { useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { z } from "zod";
 
@@ -42,6 +43,7 @@ type FormValues = z.infer<typeof schema>;
 
 export default function OnboardingScreen() {
   const { session, completeOnboarding } = useAppState();
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const { control, handleSubmit, watch, setValue } = useForm<FormValues>({
     defaultValues: {
       email: "",
@@ -75,6 +77,7 @@ export default function OnboardingScreen() {
 
   const submit = handleSubmit(async (values) => {
     const parsed = schema.parse(values);
+    setSubmitError(null);
 
     try {
       await completeOnboarding({
@@ -94,6 +97,7 @@ export default function OnboardingScreen() {
       router.replace("/(tabs)");
     } catch (error) {
       console.error("Onboarding persistence failed", error);
+      setSubmitError("Setup could not be saved. Please try again.");
     }
   });
 
@@ -297,6 +301,7 @@ export default function OnboardingScreen() {
               )}
             />
 
+            {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
             <PrimaryButton label="Build my plan" onPress={submit} />
           </Card>
         </FadeInView>
@@ -353,5 +358,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm,
+  },
+  submitError: {
+    color: colors.danger,
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: spacing.sm,
   },
 });

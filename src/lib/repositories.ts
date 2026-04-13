@@ -13,16 +13,116 @@ import {
 } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 
+const sports = ["cycling", "bjj", "swimming", "surfing"] as const;
+const levels = ["foundation", "intermediate", "competitive"] as const;
+const goalFocuses = ["strength_to_weight", "endurance", "durability", "mobility"] as const;
+const readinessLevels = ["green", "yellow", "red"] as const;
+const trainingDays = [2, 3, 4] as const;
+
+function isEnumValue<T extends readonly string[]>(value: unknown, allowed: T): value is T[number] {
+  return typeof value === "string" && allowed.includes(value as T[number]);
+}
+
+function toFiniteNumber(value: unknown, fieldName: string): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid ${fieldName} value from repository.`);
+  }
+
+  return parsed;
+}
+
+function toOptionalFiniteNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === "") {
+    return undefined;
+  }
+
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseMetrics(value: unknown): WorkoutLog["metrics"] {
+  const raw = typeof value === "string" ? JSON.parse(value) : value;
+
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("Invalid workout metrics payload from repository.");
+  }
+
+  const metrics = raw as Record<string, unknown>;
+
+  return {
+    durationMinutes: toOptionalFiniteNumber(metrics.durationMinutes),
+    perceivedEffort: toOptionalFiniteNumber(metrics.perceivedEffort),
+    distanceKm: toOptionalFiniteNumber(metrics.distanceKm),
+    elevationMeters: toOptionalFiniteNumber(metrics.elevationMeters),
+    averagePowerWatts: toOptionalFiniteNumber(metrics.averagePowerWatts),
+    roundsCompleted: toOptionalFiniteNumber(metrics.roundsCompleted),
+    sparringRounds: toOptionalFiniteNumber(metrics.sparringRounds),
+    swimDistanceMeters: toOptionalFiniteNumber(metrics.swimDistanceMeters),
+    intervalPacePer100m:
+      typeof metrics.intervalPacePer100m === "string" ? metrics.intervalPacePer100m : undefined,
+    waveCount: toOptionalFiniteNumber(metrics.waveCount),
+    bodyweightKg: toOptionalFiniteNumber(metrics.bodyweightKg),
+  };
+}
+
+function parseReadiness(value: unknown): WorkoutLog["readiness"] {
+  const raw = typeof value === "string" ? JSON.parse(value) : value;
+
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("Invalid readiness payload from repository.");
+  }
+
+  const readiness = raw as Record<string, unknown>;
+
+  if (!isEnumValue(readiness.level, readinessLevels)) {
+    throw new Error("Invalid readiness level from repository.");
+  }
+
+  return {
+    sleepHours: toFiniteNumber(readiness.sleepHours, "sleepHours"),
+    soreness: toFiniteNumber(readiness.soreness, "soreness"),
+    energy: toFiniteNumber(readiness.energy, "energy"),
+    stress: toFiniteNumber(readiness.stress, "stress"),
+    pain: toFiniteNumber(readiness.pain, "pain"),
+    level: readiness.level,
+  };
+}
+
 function mapProfileRowToRemoteProfile(row: Record<string, unknown>): RemoteProfile {
+  if (!isEnumValue(row.primary_sport, sports)) {
+    throw new Error("Invalid primary sport from repository.");
+  }
+
+  if (!isEnumValue(row.experience_level, levels)) {
+    throw new Error("Invalid experience level from repository.");
+  }
+
+  if (!isEnumValue(row.goal_focus, goalFocuses)) {
+    throw new Error("Invalid goal focus from repository.");
+  }
+
+  const parsedTrainingDays = toFiniteNumber(row.training_days, "training_days");
+  if (!trainingDays.includes(parsedTrainingDays as 2 | 3 | 4)) {
+    throw new Error("Invalid training days from repository.");
+  }
+
+  const secondarySports = Array.isArray(row.secondary_sports)
+    ? row.secondary_sports.filter((sport): sport is AthleteProfile["secondarySports"][number] =>
+        isEnumValue(sport, sports),
+      )
+    : [];
+
   return {
     userId: String(row.user_id),
     email: String(row.email),
-    primarySport: row.primary_sport as AthleteProfile["primarySport"],
-    secondarySports: ((row.secondary_sports as string[] | null) ?? []) as AthleteProfile["secondarySports"],
-    experienceLevel: row.experience_level as AthleteProfile["experienceLevel"],
-    trainingDays: row.training_days as AthleteProfile["trainingDays"],
-    goalFocus: row.goal_focus as AthleteProfile["goalFocus"],
-    bodyweightKg: Number(row.bodyweight_kg),
+    primarySport: row.primary_sport,
+    secondarySports,
+    experienceLevel: row.experience_level,
+    trainingDays: parsedTrainingDays as AthleteProfile["trainingDays"],
+    goalFocus: row.goal_focus,
+    bodyweightKg: toFiniteNumber(row.bodyweight_kg, "bodyweight_kg"),
     bjjWeightClass: (row.bjj_weight_class as string | null) ?? undefined,
     injuryNotes: (row.injury_notes as string | null) ?? undefined,
     updatedAt: String(row.updated_at ?? new Date().toISOString()),
@@ -30,14 +130,18 @@ function mapProfileRowToRemoteProfile(row: Record<string, unknown>): RemoteProfi
 }
 
 function mapWorkoutRowToRemoteWorkoutLog(row: Record<string, unknown>): RemoteWorkoutLog {
+  if (!isEnumValue(row.sport, sports)) {
+    throw new Error("Invalid workout sport from repository.");
+  }
+
   return {
     id: String(row.id),
     sessionId: String(row.session_id),
     userId: String(row.user_id),
-    sport: row.sport as WorkoutLog["sport"],
+    sport: row.sport,
     completedAt: String(row.completed_at),
-    readiness: row.readiness as WorkoutLog["readiness"],
-    metrics: row.metrics as WorkoutLog["metrics"],
+    readiness: parseReadiness(row.readiness),
+    metrics: parseMetrics(row.metrics),
     notes: (row.notes as string | null) ?? undefined,
     updatedAt: String(row.updated_at ?? new Date().toISOString()),
   };

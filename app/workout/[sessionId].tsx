@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Control, Controller, useForm } from "react-hook-form";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 
 import {
@@ -45,6 +45,7 @@ type FormValues = z.infer<typeof schema>;
 export default function WorkoutSessionScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const { authReady, session: authSession, profile, logWorkout } = useAppState();
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const { data: plan } = useQuery({
     queryKey: ["plan", profile?.primarySport, profile?.trainingDays],
     queryFn: () => fetchPlanForProfile(profile!),
@@ -53,7 +54,7 @@ export default function WorkoutSessionScreen() {
 
   const trainingSession = plan?.sessions.find((item) => item.id === sessionId);
 
-  const { control, handleSubmit, reset, watch } = useForm<FormValues>({
+  const { control, getValues, handleSubmit, reset, watch } = useForm<FormValues>({
     defaultValues: {
       sleepHours: 7,
       soreness: 2,
@@ -72,12 +73,12 @@ export default function WorkoutSessionScreen() {
       return;
     }
 
-    reset((currentValues) => ({
-      ...currentValues,
+    reset({
+      ...getValues(),
       durationMinutes: trainingSession.durationMinutes,
-      bodyweightKg: currentValues.bodyweightKg ?? profile?.bodyweightKg,
-    }));
-  }, [profile?.bodyweightKg, reset, trainingSession]);
+      bodyweightKg: profile?.bodyweightKg,
+    }, { keepDirtyValues: true });
+  }, [getValues, profile?.bodyweightKg, reset, trainingSession]);
 
   if (!authReady) {
     return (
@@ -99,8 +100,23 @@ export default function WorkoutSessionScreen() {
     return <Redirect href="/auth" />;
   }
 
-  if (!profile || !trainingSession) {
+  if (!profile) {
     return <Screen />;
+  }
+
+  if (!trainingSession) {
+    return (
+      <Screen>
+        <View style={styles.notFoundWrap}>
+          <SectionTitle
+            eyebrow="Workout"
+            title="Session not found"
+            subtitle="This workout link is stale or no longer matches your active plan."
+          />
+          <PrimaryButton label="Back to today" onPress={() => router.replace("/(tabs)")} />
+        </View>
+      </Screen>
+    );
   }
 
   const readiness = evaluateReadiness({
@@ -111,36 +127,42 @@ export default function WorkoutSessionScreen() {
     pain: Number(watch("pain")),
   });
 
-  const submit = handleSubmit((values) => {
+  const submit = handleSubmit(async (values) => {
     const parsed = schema.parse(values);
+    setSubmitError(null);
 
-    void logWorkout({
-      sessionId: trainingSession.id,
-      sport: trainingSession.sport,
-      readiness: {
-        sleepHours: parsed.sleepHours,
-        soreness: parsed.soreness,
-        energy: parsed.energy,
-        stress: parsed.stress,
-        pain: parsed.pain,
-        level: readiness.level,
-      },
-      metrics: {
-        durationMinutes: parsed.durationMinutes,
-        perceivedEffort: parsed.perceivedEffort,
-        distanceKm: parsed.distanceKm,
-        averagePowerWatts: parsed.averagePowerWatts,
-        roundsCompleted: parsed.roundsCompleted,
-        sparringRounds: parsed.sparringRounds,
-        swimDistanceMeters: parsed.swimDistanceMeters,
-        intervalPacePer100m: parsed.intervalPacePer100m,
-        waveCount: parsed.waveCount,
-        bodyweightKg: parsed.bodyweightKg,
-      },
-      notes: parsed.notes,
-    });
+    try {
+      await logWorkout({
+        sessionId: trainingSession.id,
+        sport: trainingSession.sport,
+        readiness: {
+          sleepHours: parsed.sleepHours,
+          soreness: parsed.soreness,
+          energy: parsed.energy,
+          stress: parsed.stress,
+          pain: parsed.pain,
+          level: readiness.level,
+        },
+        metrics: {
+          durationMinutes: parsed.durationMinutes,
+          perceivedEffort: parsed.perceivedEffort,
+          distanceKm: parsed.distanceKm,
+          averagePowerWatts: parsed.averagePowerWatts,
+          roundsCompleted: parsed.roundsCompleted,
+          sparringRounds: parsed.sparringRounds,
+          swimDistanceMeters: parsed.swimDistanceMeters,
+          intervalPacePer100m: parsed.intervalPacePer100m,
+          waveCount: parsed.waveCount,
+          bodyweightKg: parsed.bodyweightKg,
+        },
+        notes: parsed.notes,
+      });
 
-    router.replace("/(tabs)");
+      router.replace("/(tabs)");
+    } catch (error) {
+      console.error("Workout logging failed", error);
+      setSubmitError("Workout could not be saved. Please try again.");
+    }
   });
 
   return (
@@ -219,6 +241,7 @@ export default function WorkoutSessionScreen() {
               <Text style={styles.cardTitle}>Log session</Text>
               <Text style={styles.caption}>After training</Text>
             </View>
+            {submitError ? <Text style={styles.errorText}>{submitError}</Text> : null}
             <Controller
               control={control}
               name="durationMinutes"
@@ -412,6 +435,11 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: spacing.sm,
   },
+  notFoundWrap: {
+    flex: 1,
+    justifyContent: "center",
+    gap: spacing.lg,
+  },
   playerCard: {
     gap: spacing.md,
     paddingTop: spacing.lg,
@@ -475,6 +503,11 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
     fontSize: 13,
+  },
+  errorText: {
+    color: colors.danger,
+    fontSize: 13,
+    lineHeight: 20,
   },
   blockWrap: {
     gap: 8,

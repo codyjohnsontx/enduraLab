@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 
-import { loadStoredState, persistState } from "@/lib/storage";
+import { defaultAppState, loadStoredState, persistState } from "@/lib/storage";
 import { createRepository } from "@/lib/repositories";
 import {
   AppState,
@@ -111,9 +111,9 @@ export function AppProvider({ children }: PropsWithChildren) {
                   bjjWeightClass: remoteProfile.bjjWeightClass,
                   injuryNotes: remoteProfile.injuryNotes,
                 }
-              : nextState.profile,
-            onboardingCompleted: Boolean(remoteProfile) || nextState.onboardingCompleted,
-            workoutLogs: remoteWorkoutLogs.length ? remoteWorkoutLogs : nextState.workoutLogs,
+              : defaultAppState.profile,
+            onboardingCompleted: Boolean(remoteProfile),
+            workoutLogs: remoteWorkoutLogs,
           };
 
           setSyncStatus("idle");
@@ -185,6 +185,7 @@ export function AppProvider({ children }: PropsWithChildren) {
           } catch (error) {
             setSyncStatus("error");
             setSyncError(error instanceof Error ? error.message : "Profile sync failed.");
+            throw error;
           }
         }
 
@@ -204,6 +205,7 @@ export function AppProvider({ children }: PropsWithChildren) {
           metrics: payload.metrics,
           notes: payload.notes,
         };
+        const previousLogs = state.workoutLogs;
 
         setState((current) => ({
           ...current,
@@ -216,8 +218,13 @@ export function AppProvider({ children }: PropsWithChildren) {
             await repository.saveWorkoutLog(entry, state.session);
             setSyncStatus("idle");
           } catch (error) {
+            setState((current) => ({
+              ...current,
+              workoutLogs: previousLogs,
+            }));
             setSyncStatus("error");
             setSyncError(error instanceof Error ? error.message : "Workout sync failed.");
+            throw error;
           }
         }
       },

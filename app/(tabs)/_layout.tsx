@@ -22,7 +22,7 @@ export default function TabLayout() {
     );
   }
 
-  if (authReady && (!session || !onboardingCompleted)) {
+  if (!session || !onboardingCompleted) {
     return <Redirect href={!session ? "/auth" : "/onboarding"} />;
   }
 
