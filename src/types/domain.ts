@@ -120,6 +120,7 @@ export type AppDataRepository = {
   mode: RepositoryMode;
   isConfigured: boolean;
   getSession: () => Promise<AuthSession | null>;
+  subscribeToAuthChanges: (listener: (session: AuthSession | null) => void) => () => void;
   signInWithMagicLink: (email: string) => Promise<{ mode: RepositoryMode; sent: boolean }>;
   startLocalPreviewSession: (email: string) => Promise<AuthSession>;
   signOut: () => Promise<void>;

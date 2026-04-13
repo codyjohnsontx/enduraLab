@@ -7,11 +7,14 @@ import {
   WorkoutLog,
 } from "@/types/domain";
 import { env } from "@/lib/env";
-import {
-  loadLocalPreviewSession,
-  persistLocalPreviewSession,
-} from "@/lib/storage";
+import { loadLocalPreviewSession, persistLocalPreviewSession } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
+import {
+  ProfileInsert,
+  ProfileRow,
+  WorkoutLogInsert,
+  WorkoutLogRow,
+} from "@/types/supabase";
 
 const sports = ["cycling", "bjj", "swimming", "surfing"] as const;
 const levels = ["foundation", "intermediate", "competitive"] as const;
@@ -112,7 +115,7 @@ function parseReadiness(value: unknown): WorkoutLog["readiness"] {
   };
 }
 
-function mapProfileRowToRemoteProfile(row: Record<string, unknown>): RemoteProfile {
+function mapProfileRowToRemoteProfile(row: ProfileRow): RemoteProfile {
   if (!isEnumValue(row.primary_sport, sports)) {
     throw new Error("Invalid primary sport from repository.");
   }
@@ -125,47 +128,42 @@ function mapProfileRowToRemoteProfile(row: Record<string, unknown>): RemoteProfi
     throw new Error("Invalid goal focus from repository.");
   }
 
-  const parsedTrainingDays = toFiniteNumber(row.training_days, "training_days");
-  if (!trainingDays.includes(parsedTrainingDays as 2 | 3 | 4)) {
+  if (!trainingDays.includes(row.training_days)) {
     throw new Error("Invalid training days from repository.");
   }
 
-  const secondarySports = Array.isArray(row.secondary_sports)
-    ? row.secondary_sports.filter((sport): sport is AthleteProfile["secondarySports"][number] =>
-        isEnumValue(sport, sports),
-      )
-    : [];
+  const secondarySports = row.secondary_sports.filter((sport) => isEnumValue(sport, sports));
 
   return {
-    userId: String(row.user_id),
-    email: String(row.email),
+    userId: row.user_id,
+    email: row.email,
     primarySport: row.primary_sport,
     secondarySports,
     experienceLevel: row.experience_level,
-    trainingDays: parsedTrainingDays as AthleteProfile["trainingDays"],
+    trainingDays: row.training_days,
     goalFocus: row.goal_focus,
     bodyweightKg: toFiniteNumber(row.bodyweight_kg, "bodyweight_kg"),
-    bjjWeightClass: (row.bjj_weight_class as string | null) ?? undefined,
-    injuryNotes: (row.injury_notes as string | null) ?? undefined,
-    updatedAt: String(row.updated_at ?? new Date().toISOString()),
+    bjjWeightClass: row.bjj_weight_class ?? undefined,
+    injuryNotes: row.injury_notes ?? undefined,
+    updatedAt: row.updated_at ?? new Date().toISOString(),
   };
 }
 
-function mapWorkoutRowToRemoteWorkoutLog(row: Record<string, unknown>): RemoteWorkoutLog {
+function mapWorkoutRowToRemoteWorkoutLog(row: WorkoutLogRow): RemoteWorkoutLog {
   if (!isEnumValue(row.sport, sports)) {
     throw new Error("Invalid workout sport from repository.");
   }
 
   return {
-    id: String(row.id),
-    sessionId: String(row.session_id),
-    userId: String(row.user_id),
+    id: row.id,
+    sessionId: row.session_id,
+    userId: row.user_id,
     sport: row.sport,
-    completedAt: String(row.completed_at),
+    completedAt: row.completed_at,
     readiness: parseReadiness(row.readiness),
     metrics: parseMetrics(row.metrics),
-    notes: (row.notes as string | null) ?? undefined,
-    updatedAt: String(row.updated_at ?? new Date().toISOString()),
+    notes: row.notes ?? undefined,
+    updatedAt: row.updated_at ?? new Date().toISOString(),
   };
 }
 
@@ -174,6 +172,9 @@ const localPreviewRepository: AppDataRepository = {
   isConfigured: false,
   async getSession() {
     return loadLocalPreviewSession();
+  },
+  subscribeToAuthChanges() {
+    return () => undefined;
   },
   async signInWithMagicLink() {
     return { mode: "local-preview", sent: false };
@@ -235,6 +236,38 @@ const supabaseRepository: AppDataRepository = {
       source: "supabase",
     };
   },
+  subscribeToAuthChanges(listener) {
+    let prevUserId: string | null = null;
+
+    const {
+      data: { subscription },
+    } = supabase!.auth.onAuthStateChange((event, session) => {
+      if (event === "INITIAL_SESSION") {
+        return;
+      }
+
+      if (event === "TOKEN_REFRESHED" && session?.user?.id === prevUserId) {
+        return;
+      }
+
+      if (!session?.user) {
+        prevUserId = null;
+        listener(null);
+        return;
+      }
+
+      prevUserId = session.user.id;
+      listener({
+        userId: session.user.id,
+        email: session.user.email ?? "",
+        source: "supabase",
+      });
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  },
   async signInWithMagicLink(email: string) {
     const { error } = await supabase!.auth.signInWithOtp({
       email,
@@ -271,7 +304,7 @@ const supabaseRepository: AppDataRepository = {
       .from("profiles")
       .select("*")
       .eq("user_id", userId)
-      .maybeSingle();
+      .maybeSingle<ProfileRow>();
 
     if (error) {
       throw error;
@@ -280,7 +313,7 @@ const supabaseRepository: AppDataRepository = {
     return data ? mapProfileRowToRemoteProfile(data) : null;
   },
   async saveProfile(profile, session) {
-    const payload = {
+    const payload: ProfileInsert = {
       user_id: session.userId,
       email: profile.email,
       primary_sport: profile.primarySport,
@@ -291,14 +324,13 @@ const supabaseRepository: AppDataRepository = {
       bodyweight_kg: profile.bodyweightKg,
       bjj_weight_class: profile.bjjWeightClass ?? null,
       injury_notes: profile.injuryNotes ?? null,
-      updated_at: new Date().toISOString(),
     };
 
     const { data, error } = await supabase!
       .from("profiles")
       .upsert(payload)
       .select("*")
-      .single();
+      .single<ProfileRow>();
 
     if (error) {
       throw error;
@@ -311,7 +343,8 @@ const supabaseRepository: AppDataRepository = {
       .from("workout_logs")
       .select("*")
       .eq("user_id", userId)
-      .order("completed_at", { ascending: false });
+      .order("completed_at", { ascending: false })
+      .returns<WorkoutLogRow[]>();
 
     if (error) {
       throw error;
@@ -320,7 +353,7 @@ const supabaseRepository: AppDataRepository = {
     return (data ?? []).map((row) => mapWorkoutRowToRemoteWorkoutLog(row));
   },
   async saveWorkoutLog(workoutLog, session) {
-    const payload = {
+    const payload: WorkoutLogInsert = {
       id: workoutLog.id,
       user_id: session.userId,
       session_id: workoutLog.sessionId,
@@ -329,14 +362,13 @@ const supabaseRepository: AppDataRepository = {
       readiness: workoutLog.readiness,
       metrics: workoutLog.metrics,
       notes: workoutLog.notes ?? null,
-      updated_at: new Date().toISOString(),
     };
 
     const { data, error } = await supabase!
       .from("workout_logs")
       .upsert(payload)
       .select("*")
-      .single();
+      .single<WorkoutLogRow>();
 
     if (error) {
       throw error;
