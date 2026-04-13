@@ -5,7 +5,7 @@ returns trigger
 language plpgsql
 as $$
 begin
-  new.updated_at = timezone('utc'::text, now());
+  new.updated_at = now();
   return new;
 end;
 $$;
@@ -23,8 +23,8 @@ create table if not exists public.profiles (
   bodyweight_kg numeric(5,2) not null check (bodyweight_kg > 0),
   bjj_weight_class text,
   injury_notes text,
-  created_at timestamptz not null default timezone('utc'::text, now()),
-  updated_at timestamptz not null default timezone('utc'::text, now())
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table if not exists public.workout_logs (
@@ -36,8 +36,8 @@ create table if not exists public.workout_logs (
   readiness jsonb not null,
   metrics jsonb not null default '{}'::jsonb,
   notes text,
-  created_at timestamptz not null default timezone('utc'::text, now()),
-  updated_at timestamptz not null default timezone('utc'::text, now())
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create index if not exists workout_logs_user_id_idx

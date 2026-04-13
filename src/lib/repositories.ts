@@ -178,7 +178,6 @@ const supabaseRepository: AppDataRepository = {
       bodyweight_kg: profile.bodyweightKg,
       bjj_weight_class: profile.bjjWeightClass ?? null,
       injury_notes: profile.injuryNotes ?? null,
-      updated_at: new Date().toISOString(),
     };
 
     const { data, error } = await supabase!
@@ -217,7 +216,6 @@ const supabaseRepository: AppDataRepository = {
       readiness: workoutLog.readiness,
       metrics: workoutLog.metrics,
       notes: workoutLog.notes ?? null,
-      updated_at: new Date().toISOString(),
     };
 
     const { data, error } = await supabase!

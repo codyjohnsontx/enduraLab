@@ -73,10 +73,17 @@ export function AppProvider({ children }: PropsWithChildren) {
     const syncRemoteState = async (session: AuthSession | null, storedState: AppState) => {
       const token = ++syncCounterRef.current;
 
-      if (!session || !repository.isConfigured) {
+      if (!repository.isConfigured) {
         return {
           ...storedState,
           session,
+        };
+      }
+
+      if (!session) {
+        return {
+          ...defaultAppState,
+          session: null,
         };
       }
 
@@ -159,18 +166,11 @@ export function AppProvider({ children }: PropsWithChildren) {
       }
 
       setState((current) => ({
-        ...current,
+        ...defaultAppState,
         session,
       }));
 
       if (!session) {
-        setState((current) => ({
-          ...current,
-          session: null,
-          profile: null,
-          workoutLogs: [],
-          onboardingCompleted: false,
-        }));
         return;
       }
 
@@ -224,11 +224,17 @@ export function AppProvider({ children }: PropsWithChildren) {
       },
       async completeOnboarding(profile) {
         let nextProfile = profile;
+        const initiatingSession = stateRef.current.session;
 
-        if (state.session) {
+        if (state.session?.source === "supabase") {
           try {
             setSyncStatus("syncing");
             const remoteProfile = await repository.saveProfile(profile, state.session);
+
+            if (stateRef.current.session !== initiatingSession) {
+              return;
+            }
+
             nextProfile = {
               email: remoteProfile.email,
               primarySport: remoteProfile.primarySport,
@@ -242,9 +248,17 @@ export function AppProvider({ children }: PropsWithChildren) {
             };
             setSyncStatus("idle");
           } catch (error) {
+            if (stateRef.current.session !== initiatingSession) {
+              return;
+            }
+
             setSyncStatus("error");
             setSyncError(error instanceof Error ? error.message : "Profile sync failed.");
           }
+        }
+
+        if (stateRef.current.session !== initiatingSession) {
+          return;
         }
 
         setState((current) => ({
@@ -269,7 +283,7 @@ export function AppProvider({ children }: PropsWithChildren) {
           workoutLogs: [entry, ...current.workoutLogs],
         }));
 
-        if (state.session) {
+        if (state.session?.source === "supabase") {
           try {
             setSyncStatus("syncing");
             await repository.saveWorkoutLog(entry, state.session);

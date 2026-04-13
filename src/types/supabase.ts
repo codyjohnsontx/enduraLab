@@ -28,5 +28,5 @@ export type WorkoutLogRow = {
   updated_at: string;
 };
 
-export type ProfileInsert = Omit<ProfileRow, "created_at">;
-export type WorkoutLogInsert = Omit<WorkoutLogRow, "created_at">;
+export type ProfileInsert = Omit<ProfileRow, "created_at" | "updated_at">;
+export type WorkoutLogInsert = Omit<WorkoutLogRow, "created_at" | "updated_at">;
