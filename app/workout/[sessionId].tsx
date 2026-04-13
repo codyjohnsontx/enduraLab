@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Control, Controller, useForm } from "react-hook-form";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { z } from "zod";
@@ -43,14 +43,14 @@ type FormValues = z.infer<typeof schema>;
 
 export default function WorkoutSessionScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
-  const { profile, logWorkout } = useAppState();
+  const { session: authSession, profile, logWorkout } = useAppState();
   const { data: plan } = useQuery({
     queryKey: ["plan", profile?.primarySport, profile?.trainingDays],
     queryFn: () => fetchPlanForProfile(profile!),
     enabled: Boolean(profile),
   });
 
-  const session = plan?.sessions.find((item) => item.id === sessionId);
+  const trainingSession = plan?.sessions.find((item) => item.id === sessionId);
 
   const { control, handleSubmit, watch } = useForm<FormValues>({
     defaultValues: {
@@ -59,14 +59,18 @@ export default function WorkoutSessionScreen() {
       energy: 4,
       stress: 2,
       pain: 1,
-      durationMinutes: session?.durationMinutes ?? 45,
+      durationMinutes: trainingSession?.durationMinutes ?? 45,
       perceivedEffort: 7,
       notes: "",
       bodyweightKg: profile?.bodyweightKg,
     },
   });
 
-  if (!profile || !session) {
+  if (!authSession) {
+    return <Redirect href="/auth" />;
+  }
+
+  if (!profile || !trainingSession) {
     return <Screen />;
   }
 
@@ -81,9 +85,9 @@ export default function WorkoutSessionScreen() {
   const submit = handleSubmit((values) => {
     const parsed = schema.parse(values);
 
-    logWorkout({
-      sessionId: session.id,
-      sport: session.sport,
+    void logWorkout({
+      sessionId: trainingSession.id,
+      sport: trainingSession.sport,
       readiness: {
         sleepHours: parsed.sleepHours,
         soreness: parsed.soreness,
@@ -116,9 +120,9 @@ export default function WorkoutSessionScreen() {
         <FadeInView delay={40}>
           <View style={styles.header}>
             <SectionTitle
-              eyebrow={`Week ${session.week} · Day ${session.dayIndex}`}
-              title={session.title}
-              subtitle={`${session.durationMinutes} min · ${session.emphasis.join(" · ")}`}
+              eyebrow={`Week ${trainingSession.week} · Day ${trainingSession.dayIndex}`}
+              title={trainingSession.title}
+              subtitle={`${trainingSession.durationMinutes} min · ${trainingSession.emphasis.join(" · ")}`}
             />
           </View>
         </FadeInView>
@@ -132,7 +136,7 @@ export default function WorkoutSessionScreen() {
               </View>
               <View style={styles.playerStat}>
                 <Text style={styles.playerLabel}>Planned duration</Text>
-                <Text style={styles.playerValue}>{session.durationMinutes}m</Text>
+                <Text style={styles.playerValue}>{trainingSession.durationMinutes}m</Text>
               </View>
               <ReadinessPill level={readiness.level} />
             </View>
@@ -140,7 +144,7 @@ export default function WorkoutSessionScreen() {
               <View style={styles.progressFill} />
             </View>
             <Text style={styles.helper}>{readiness.recommendation}</Text>
-            <Text style={styles.helper}>{session.recommendation}</Text>
+            <Text style={styles.helper}>{trainingSession.recommendation}</Text>
           </Card>
         </FadeInView>
 
@@ -150,7 +154,7 @@ export default function WorkoutSessionScreen() {
             {(["warmup", "main", "accessory", "mobility", "cooldown"] as const).map((block) => (
               <View key={block} style={styles.blockWrap}>
                 <Text style={styles.blockTitle}>{block}</Text>
-                {session.blocks[block].map((exercise) => (
+                {trainingSession.blocks[block].map((exercise) => (
                   <View key={`${block}-${exercise.name}`} style={styles.exerciseWrap}>
                     <ListRow
                       title={exercise.name}

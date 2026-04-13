@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { Controller, useForm } from "react-hook-form";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { z } from "zod";
@@ -41,7 +41,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function OnboardingScreen() {
-  const { completeOnboarding } = useAppState();
+  const { session, completeOnboarding } = useAppState();
   const { control, handleSubmit, watch, setValue } = useForm<FormValues>({
     defaultValues: {
       email: "",
@@ -76,7 +76,7 @@ export default function OnboardingScreen() {
   const submit = handleSubmit((values) => {
     const parsed = schema.parse(values);
 
-    completeOnboarding({
+    void completeOnboarding({
       email: parsed.email,
       primarySport: parsed.primarySport,
       trainingDays: parsed.trainingDays,
@@ -92,6 +92,10 @@ export default function OnboardingScreen() {
 
     router.replace("/(tabs)");
   });
+
+  if (!session) {
+    return <Redirect href="/auth" />;
+  }
 
   return (
     <Screen>

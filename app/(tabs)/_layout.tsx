@@ -1,8 +1,15 @@
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
 
 import { colors } from "@/constants/theme";
+import { useAppState } from "@/providers/app-provider";
 
 export default function TabLayout() {
+  const { authReady, session, onboardingCompleted } = useAppState();
+
+  if (authReady && (!session || !onboardingCompleted)) {
+    return <Redirect href={!session ? "/auth" : "/onboarding"} />;
+  }
+
   return (
     <Tabs
       screenOptions={{
