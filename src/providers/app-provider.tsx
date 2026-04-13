@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -57,9 +58,62 @@ export function AppProvider({ children }: PropsWithChildren) {
   const [authReady, setAuthReady] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [syncError, setSyncError] = useState<string | null>(null);
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     let active = true;
+
+    const syncRemoteState = async (session: AuthSession | null, storedState: AppState) => {
+      if (!session || !repository.isConfigured) {
+        return {
+          ...storedState,
+          session,
+        };
+      }
+
+      setSyncStatus("syncing");
+
+      try {
+        const [remoteProfile, remoteWorkoutLogs] = await Promise.all([
+          repository.loadProfile(session.userId),
+          repository.loadWorkoutLogs(session.userId),
+        ]);
+
+        setSyncStatus("idle");
+
+        return {
+          ...storedState,
+          session,
+          profile: remoteProfile
+            ? {
+                email: remoteProfile.email,
+                primarySport: remoteProfile.primarySport,
+                secondarySports: remoteProfile.secondarySports,
+                experienceLevel: remoteProfile.experienceLevel,
+                trainingDays: remoteProfile.trainingDays,
+                goalFocus: remoteProfile.goalFocus,
+                bodyweightKg: remoteProfile.bodyweightKg,
+                bjjWeightClass: remoteProfile.bjjWeightClass,
+                injuryNotes: remoteProfile.injuryNotes,
+              }
+            : storedState.profile,
+          onboardingCompleted: Boolean(remoteProfile) || storedState.onboardingCompleted,
+          workoutLogs: remoteWorkoutLogs.length ? remoteWorkoutLogs : storedState.workoutLogs,
+        };
+      } catch (error) {
+        setSyncStatus("error");
+        setSyncError(error instanceof Error ? error.message : "Failed to load remote data.");
+
+        return {
+          ...storedState,
+          session,
+        };
+      }
+    };
 
     (async () => {
       const storedState = await loadStoredState();
@@ -69,45 +123,7 @@ export function AppProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      let nextState: AppState = {
-        ...storedState,
-        session,
-      };
-
-      if (session && repository.isConfigured) {
-        setSyncStatus("syncing");
-
-        try {
-          const [remoteProfile, remoteWorkoutLogs] = await Promise.all([
-            repository.loadProfile(session.userId),
-            repository.loadWorkoutLogs(session.userId),
-          ]);
-
-          nextState = {
-            ...nextState,
-            profile: remoteProfile
-              ? {
-                  email: remoteProfile.email,
-                  primarySport: remoteProfile.primarySport,
-                  secondarySports: remoteProfile.secondarySports,
-                  experienceLevel: remoteProfile.experienceLevel,
-                  trainingDays: remoteProfile.trainingDays,
-                  goalFocus: remoteProfile.goalFocus,
-                  bodyweightKg: remoteProfile.bodyweightKg,
-                  bjjWeightClass: remoteProfile.bjjWeightClass,
-                  injuryNotes: remoteProfile.injuryNotes,
-                }
-              : nextState.profile,
-            onboardingCompleted: Boolean(remoteProfile) || nextState.onboardingCompleted,
-            workoutLogs: remoteWorkoutLogs.length ? remoteWorkoutLogs : nextState.workoutLogs,
-          };
-
-          setSyncStatus("idle");
-        } catch (error) {
-          setSyncStatus("error");
-          setSyncError(error instanceof Error ? error.message : "Failed to load remote data.");
-        }
-      }
+      const nextState = await syncRemoteState(session, storedState);
 
       startTransition(() => {
         setState(nextState);
@@ -116,8 +132,44 @@ export function AppProvider({ children }: PropsWithChildren) {
       });
     })();
 
+    const unsubscribe = repository.subscribeToAuthChanges((session) => {
+      if (!active) {
+        return;
+      }
+
+      setState((current) => ({
+        ...current,
+        session,
+      }));
+
+      if (!session) {
+        setState((current) => ({
+          ...current,
+          session: null,
+          profile: null,
+          workoutLogs: [],
+          onboardingCompleted: false,
+        }));
+        return;
+      }
+
+      void (async () => {
+        const syncedState = await syncRemoteState(session, {
+          ...stateRef.current,
+          session,
+        });
+
+        if (!active) {
+          return;
+        }
+
+        setState(syncedState);
+      })();
+    });
+
     return () => {
       active = false;
+      unsubscribe();
     };
   }, []);
 

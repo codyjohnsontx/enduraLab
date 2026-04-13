@@ -12,34 +12,40 @@ import {
   persistLocalPreviewSession,
 } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
+import {
+  ProfileInsert,
+  ProfileRow,
+  WorkoutLogInsert,
+  WorkoutLogRow,
+} from "@/types/supabase";
 
-function mapProfileRowToRemoteProfile(row: Record<string, unknown>): RemoteProfile {
+function mapProfileRowToRemoteProfile(row: ProfileRow): RemoteProfile {
   return {
-    userId: String(row.user_id),
-    email: String(row.email),
-    primarySport: row.primary_sport as AthleteProfile["primarySport"],
-    secondarySports: ((row.secondary_sports as string[] | null) ?? []) as AthleteProfile["secondarySports"],
-    experienceLevel: row.experience_level as AthleteProfile["experienceLevel"],
-    trainingDays: row.training_days as AthleteProfile["trainingDays"],
-    goalFocus: row.goal_focus as AthleteProfile["goalFocus"],
-    bodyweightKg: Number(row.bodyweight_kg),
-    bjjWeightClass: (row.bjj_weight_class as string | null) ?? undefined,
-    injuryNotes: (row.injury_notes as string | null) ?? undefined,
-    updatedAt: String(row.updated_at ?? new Date().toISOString()),
+    userId: row.user_id,
+    email: row.email,
+    primarySport: row.primary_sport,
+    secondarySports: row.secondary_sports ?? [],
+    experienceLevel: row.experience_level,
+    trainingDays: row.training_days,
+    goalFocus: row.goal_focus,
+    bodyweightKg: row.bodyweight_kg,
+    bjjWeightClass: row.bjj_weight_class ?? undefined,
+    injuryNotes: row.injury_notes ?? undefined,
+    updatedAt: row.updated_at ?? new Date().toISOString(),
   };
 }
 
-function mapWorkoutRowToRemoteWorkoutLog(row: Record<string, unknown>): RemoteWorkoutLog {
+function mapWorkoutRowToRemoteWorkoutLog(row: WorkoutLogRow): RemoteWorkoutLog {
   return {
-    id: String(row.id),
-    sessionId: String(row.session_id),
-    userId: String(row.user_id),
-    sport: row.sport as WorkoutLog["sport"],
-    completedAt: String(row.completed_at),
-    readiness: row.readiness as WorkoutLog["readiness"],
-    metrics: row.metrics as WorkoutLog["metrics"],
-    notes: (row.notes as string | null) ?? undefined,
-    updatedAt: String(row.updated_at ?? new Date().toISOString()),
+    id: row.id,
+    sessionId: row.session_id,
+    userId: row.user_id,
+    sport: row.sport,
+    completedAt: row.completed_at,
+    readiness: row.readiness,
+    metrics: row.metrics,
+    notes: row.notes ?? undefined,
+    updatedAt: row.updated_at ?? new Date().toISOString(),
   };
 }
 
@@ -48,6 +54,9 @@ const localPreviewRepository: AppDataRepository = {
   isConfigured: false,
   async getSession() {
     return loadLocalPreviewSession();
+  },
+  subscribeToAuthChanges() {
+    return () => undefined;
   },
   async signInWithMagicLink() {
     return { mode: "local-preview", sent: false };
@@ -103,6 +112,26 @@ const supabaseRepository: AppDataRepository = {
       source: "supabase",
     };
   },
+  subscribeToAuthChanges(listener) {
+    const {
+      data: { subscription },
+    } = supabase!.auth.onAuthStateChange((_event, session) => {
+      if (!session?.user) {
+        listener(null);
+        return;
+      }
+
+      listener({
+        userId: session.user.id,
+        email: session.user.email ?? "",
+        source: "supabase",
+      });
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  },
   async signInWithMagicLink(email: string) {
     await supabase!.auth.signInWithOtp({
       email,
@@ -129,7 +158,7 @@ const supabaseRepository: AppDataRepository = {
       .from("profiles")
       .select("*")
       .eq("user_id", userId)
-      .maybeSingle();
+      .maybeSingle<ProfileRow>();
 
     if (error) {
       throw error;
@@ -138,7 +167,7 @@ const supabaseRepository: AppDataRepository = {
     return data ? mapProfileRowToRemoteProfile(data) : null;
   },
   async saveProfile(profile, session) {
-    const payload = {
+    const payload: ProfileInsert = {
       user_id: session.userId,
       email: profile.email,
       primary_sport: profile.primarySport,
@@ -156,7 +185,7 @@ const supabaseRepository: AppDataRepository = {
       .from("profiles")
       .upsert(payload)
       .select("*")
-      .single();
+      .single<ProfileRow>();
 
     if (error) {
       throw error;
@@ -169,7 +198,8 @@ const supabaseRepository: AppDataRepository = {
       .from("workout_logs")
       .select("*")
       .eq("user_id", userId)
-      .order("completed_at", { ascending: false });
+      .order("completed_at", { ascending: false })
+      .returns<WorkoutLogRow[]>();
 
     if (error) {
       throw error;
@@ -178,7 +208,7 @@ const supabaseRepository: AppDataRepository = {
     return (data ?? []).map((row) => mapWorkoutRowToRemoteWorkoutLog(row));
   },
   async saveWorkoutLog(workoutLog, session) {
-    const payload = {
+    const payload: WorkoutLogInsert = {
       id: workoutLog.id,
       user_id: session.userId,
       session_id: workoutLog.sessionId,
@@ -194,7 +224,7 @@ const supabaseRepository: AppDataRepository = {
       .from("workout_logs")
       .upsert(payload)
       .select("*")
-      .single();
+      .single<WorkoutLogRow>();
 
     if (error) {
       throw error;
