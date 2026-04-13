@@ -90,7 +90,13 @@ const supabaseRepository: AppDataRepository = {
   mode: "supabase",
   isConfigured: true,
   async getSession() {
-    const { data } = await supabase!.auth.getSession();
+    const { data, error } = await supabase!.auth.getSession();
+
+    if (error) {
+      console.error("Supabase getSession failed", error);
+      return null;
+    }
+
     const session = data.session;
 
     if (!session?.user) {
@@ -104,12 +110,17 @@ const supabaseRepository: AppDataRepository = {
     };
   },
   async signInWithMagicLink(email: string) {
-    await supabase!.auth.signInWithOtp({
+    const { error } = await supabase!.auth.signInWithOtp({
       email,
       options: {
         emailRedirectTo: "enduralab://",
       },
     });
+
+    if (error) {
+      console.error("Supabase signInWithMagicLink failed", error);
+      throw new Error(error.message);
+    }
 
     return { mode: "supabase", sent: true };
   },
@@ -122,7 +133,12 @@ const supabaseRepository: AppDataRepository = {
     return fallbackSession;
   },
   async signOut() {
-    await supabase!.auth.signOut();
+    const { error } = await supabase!.auth.signOut();
+
+    if (error) {
+      console.error("Supabase signOut failed", error);
+      throw new Error(error.message);
+    }
   },
   async loadProfile(userId: string) {
     const { data, error } = await supabase!

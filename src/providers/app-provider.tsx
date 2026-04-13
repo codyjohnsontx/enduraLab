@@ -13,7 +13,6 @@ import { createRepository } from "@/lib/repositories";
 import {
   AppState,
   AthleteProfile,
-  AuthSession,
   ReadinessInput,
   RepositoryMode,
   SyncStatus,
@@ -59,6 +58,12 @@ export function AppProvider({ children }: PropsWithChildren) {
   const [syncError, setSyncError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (syncError) {
+      console.error("Endura Lab sync error", syncError);
+    }
+  }, [syncError]);
+
+  useEffect(() => {
     let active = true;
 
     (async () => {
@@ -69,10 +74,19 @@ export function AppProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      let nextState: AppState = {
-        ...storedState,
-        session,
-      };
+      const userChanged = session?.userId !== storedState.session?.userId;
+      let nextState: AppState = userChanged
+        ? {
+            ...storedState,
+            session,
+            profile: null,
+            workoutLogs: [],
+            onboardingCompleted: false,
+          }
+        : {
+            ...storedState,
+            session,
+          };
 
       if (session && repository.isConfigured) {
         setSyncStatus("syncing");
@@ -152,7 +166,7 @@ export function AppProvider({ children }: PropsWithChildren) {
       async completeOnboarding(profile) {
         let nextProfile = profile;
 
-        if (state.session) {
+        if (state.session?.source === "supabase") {
           try {
             setSyncStatus("syncing");
             const remoteProfile = await repository.saveProfile(profile, state.session);
@@ -196,7 +210,7 @@ export function AppProvider({ children }: PropsWithChildren) {
           workoutLogs: [entry, ...current.workoutLogs],
         }));
 
-        if (state.session) {
+        if (state.session?.source === "supabase") {
           try {
             setSyncStatus("syncing");
             await repository.saveWorkoutLog(entry, state.session);

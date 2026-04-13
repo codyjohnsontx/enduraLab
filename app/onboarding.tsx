@@ -73,24 +73,28 @@ export default function OnboardingScreen() {
     setValue("secondarySports", [...current, sport]);
   };
 
-  const submit = handleSubmit((values) => {
+  const submit = handleSubmit(async (values) => {
     const parsed = schema.parse(values);
 
-    void completeOnboarding({
-      email: parsed.email,
-      primarySport: parsed.primarySport,
-      trainingDays: parsed.trainingDays,
-      experienceLevel: parsed.experienceLevel,
-      goalFocus: parsed.goalFocus,
-      bodyweightKg: parsed.bodyweightKg,
-      secondarySports: parsed.secondarySports.filter(
-        (sport: Sport) => sport !== parsed.primarySport,
-      ),
-      bjjWeightClass: parsed.bjjWeightClass,
-      injuryNotes: parsed.injuryNotes,
-    });
+    try {
+      await completeOnboarding({
+        email: parsed.email,
+        primarySport: parsed.primarySport,
+        trainingDays: parsed.trainingDays,
+        experienceLevel: parsed.experienceLevel,
+        goalFocus: parsed.goalFocus,
+        bodyweightKg: parsed.bodyweightKg,
+        secondarySports: parsed.secondarySports.filter(
+          (sport: Sport) => sport !== parsed.primarySport,
+        ),
+        bjjWeightClass: parsed.bjjWeightClass,
+        injuryNotes: parsed.injuryNotes,
+      });
 
-    router.replace("/(tabs)");
+      router.replace("/(tabs)");
+    } catch (error) {
+      console.error("Onboarding persistence failed", error);
+    }
   });
 
   if (!session) {

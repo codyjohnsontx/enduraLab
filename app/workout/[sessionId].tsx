@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Control, Controller, useForm } from "react-hook-form";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect } from "react";
 import { z } from "zod";
 
 import {
@@ -43,7 +44,7 @@ type FormValues = z.infer<typeof schema>;
 
 export default function WorkoutSessionScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
-  const { session: authSession, profile, logWorkout } = useAppState();
+  const { authReady, session: authSession, profile, logWorkout } = useAppState();
   const { data: plan } = useQuery({
     queryKey: ["plan", profile?.primarySport, profile?.trainingDays],
     queryFn: () => fetchPlanForProfile(profile!),
@@ -52,7 +53,7 @@ export default function WorkoutSessionScreen() {
 
   const trainingSession = plan?.sessions.find((item) => item.id === sessionId);
 
-  const { control, handleSubmit, watch } = useForm<FormValues>({
+  const { control, handleSubmit, reset, watch } = useForm<FormValues>({
     defaultValues: {
       sleepHours: 7,
       soreness: 2,
@@ -66,7 +67,35 @@ export default function WorkoutSessionScreen() {
     },
   });
 
-  if (!authSession) {
+  useEffect(() => {
+    if (!trainingSession) {
+      return;
+    }
+
+    reset((currentValues) => ({
+      ...currentValues,
+      durationMinutes: trainingSession.durationMinutes,
+      bodyweightKg: currentValues.bodyweightKg ?? profile?.bodyweightKg,
+    }));
+  }, [profile?.bodyweightKg, reset, trainingSession]);
+
+  if (!authReady) {
+    return (
+      <Screen>
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <ActivityIndicator color={colors.primaryDark} size="large" />
+        </View>
+      </Screen>
+    );
+  }
+
+  if (authReady && !authSession) {
     return <Redirect href="/auth" />;
   }
 
