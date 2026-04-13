@@ -8,7 +8,7 @@ import {
 } from "@/types/domain";
 import { env } from "@/lib/env";
 import { loadLocalPreviewSession, persistLocalPreviewSession } from "@/lib/storage";
-import { supabase } from "@/lib/supabase";
+import { getMagicLinkRedirectUrl, supabase } from "@/lib/supabase";
 import {
   ProfileInsert,
   ProfileRow,
@@ -272,7 +272,7 @@ const supabaseRepository: AppDataRepository = {
     const { error } = await supabase!.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: "enduralab://",
+        emailRedirectTo: getMagicLinkRedirectUrl(),
       },
     });
 

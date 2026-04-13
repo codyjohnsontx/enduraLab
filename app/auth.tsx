@@ -24,14 +24,19 @@ export default function AuthScreen() {
   }
 
   const handleMagicLink = async () => {
-    const result = await requestMagicLink(email.trim());
+    try {
+      const result = await requestMagicLink(email.trim());
 
-    if (result.sent) {
-      setMessage("Magic link sent. Open the email on this device to finish sign-in.");
-      return;
+      if (result.sent) {
+        setMessage("Magic link sent. Open the email on this device to finish sign-in.");
+        return;
+      }
+
+      setMessage("Supabase is not connected yet. Use local preview mode for now.");
+    } catch (error) {
+      console.error("Magic link request failed", error);
+      setMessage("Magic link could not be sent. Check your Supabase setup and try again.");
     }
-
-    setMessage("Supabase is not connected yet. Use local preview mode for now.");
   };
 
   const handleLocalPreview = async () => {
