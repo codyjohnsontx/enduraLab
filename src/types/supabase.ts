@@ -4,7 +4,7 @@ export type ProfileRow = {
   user_id: string;
   email: string;
   primary_sport: AthleteProfile["primarySport"];
-  secondary_sports: AthleteProfile["secondarySports"] | null;
+  secondary_sports: AthleteProfile["secondarySports"];
   experience_level: AthleteProfile["experienceLevel"];
   training_days: AthleteProfile["trainingDays"];
   goal_focus: AthleteProfile["goalFocus"];

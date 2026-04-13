@@ -24,7 +24,7 @@ function mapProfileRowToRemoteProfile(row: ProfileRow): RemoteProfile {
     userId: row.user_id,
     email: row.email,
     primarySport: row.primary_sport,
-    secondarySports: row.secondary_sports ?? [],
+    secondarySports: row.secondary_sports,
     experienceLevel: row.experience_level,
     trainingDays: row.training_days,
     goalFocus: row.goal_focus,

@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 
-import { loadStoredState, persistState } from "@/lib/storage";
+import { defaultAppState, loadStoredState, persistState } from "@/lib/storage";
 import { createRepository } from "@/lib/repositories";
 import {
   AppState,
@@ -59,6 +59,7 @@ export function AppProvider({ children }: PropsWithChildren) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [syncError, setSyncError] = useState<string | null>(null);
   const stateRef = useRef(state);
+  const syncCounterRef = useRef(0);
 
   useEffect(() => {
     stateRef.current = state;
@@ -67,7 +68,11 @@ export function AppProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let active = true;
 
+    const isCurrentSync = (token: number) => active && syncCounterRef.current === token;
+
     const syncRemoteState = async (session: AuthSession | null, storedState: AppState) => {
+      const token = ++syncCounterRef.current;
+
       if (!session || !repository.isConfigured) {
         return {
           ...storedState,
@@ -75,7 +80,15 @@ export function AppProvider({ children }: PropsWithChildren) {
         };
       }
 
-      setSyncStatus("syncing");
+      if (isCurrentSync(token)) {
+        setSyncStatus("syncing");
+        setSyncError(null);
+      }
+
+      const baseState: AppState = {
+        ...defaultAppState,
+        session,
+      };
 
       try {
         const [remoteProfile, remoteWorkoutLogs] = await Promise.all([
@@ -83,11 +96,14 @@ export function AppProvider({ children }: PropsWithChildren) {
           repository.loadWorkoutLogs(session.userId),
         ]);
 
+        if (!isCurrentSync(token)) {
+          return null;
+        }
+
         setSyncStatus("idle");
 
         return {
-          ...storedState,
-          session,
+          ...baseState,
           profile: remoteProfile
             ? {
                 email: remoteProfile.email,
@@ -100,18 +116,19 @@ export function AppProvider({ children }: PropsWithChildren) {
                 bjjWeightClass: remoteProfile.bjjWeightClass,
                 injuryNotes: remoteProfile.injuryNotes,
               }
-            : storedState.profile,
-          onboardingCompleted: Boolean(remoteProfile) || storedState.onboardingCompleted,
-          workoutLogs: remoteWorkoutLogs.length ? remoteWorkoutLogs : storedState.workoutLogs,
+            : null,
+          onboardingCompleted: Boolean(remoteProfile),
+          workoutLogs: remoteWorkoutLogs,
         };
       } catch (error) {
+        if (!isCurrentSync(token)) {
+          return null;
+        }
+
         setSyncStatus("error");
         setSyncError(error instanceof Error ? error.message : "Failed to load remote data.");
 
-        return {
-          ...storedState,
-          session,
-        };
+        return baseState;
       }
     };
 
@@ -124,6 +141,10 @@ export function AppProvider({ children }: PropsWithChildren) {
       }
 
       const nextState = await syncRemoteState(session, storedState);
+
+      if (!active || !nextState) {
+        return;
+      }
 
       startTransition(() => {
         setState(nextState);
@@ -159,7 +180,7 @@ export function AppProvider({ children }: PropsWithChildren) {
           session,
         });
 
-        if (!active) {
+        if (!active || !syncedState) {
           return;
         }
 

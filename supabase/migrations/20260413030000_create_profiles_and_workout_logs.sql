@@ -14,7 +14,9 @@ create table if not exists public.profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   email text not null,
   primary_sport text not null check (primary_sport in ('cycling', 'bjj', 'swimming', 'surfing')),
-  secondary_sports text[] not null default '{}',
+  secondary_sports text[] not null default '{}'
+    constraint secondary_sports_supported_values_check
+    check (secondary_sports <@ array['cycling', 'bjj', 'swimming', 'surfing']::text[]),
   experience_level text not null check (experience_level in ('foundation', 'intermediate', 'competitive')),
   training_days integer not null check (training_days in (2, 3, 4)),
   goal_focus text not null check (goal_focus in ('strength_to_weight', 'endurance', 'durability', 'mobility')),
