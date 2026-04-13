@@ -225,12 +225,11 @@ export function AppProvider({ children }: PropsWithChildren) {
       async completeOnboarding(profile) {
         let nextProfile = profile;
         const initiatingSession = stateRef.current.session;
-        const activeSession = stateRef.current.session;
 
-        if (activeSession?.source === "supabase") {
+        if (initiatingSession?.source === "supabase") {
           try {
             setSyncStatus("syncing");
-            const remoteProfile = await repository.saveProfile(profile, activeSession);
+            const remoteProfile = await repository.saveProfile(profile, initiatingSession);
 
             if (stateRef.current.session !== initiatingSession) {
               return;
@@ -279,17 +278,16 @@ export function AppProvider({ children }: PropsWithChildren) {
           notes: payload.notes,
         };
         const initiatingSession = stateRef.current.session;
-        const activeSession = stateRef.current.session;
 
         setState((current) => ({
           ...current,
           workoutLogs: [entry, ...current.workoutLogs],
         }));
 
-        if (activeSession?.source === "supabase") {
+        if (initiatingSession?.source === "supabase") {
           try {
             setSyncStatus("syncing");
-            await repository.saveWorkoutLog(entry, activeSession);
+            await repository.saveWorkoutLog(entry, initiatingSession);
 
             if (stateRef.current.session !== initiatingSession) {
               return;
