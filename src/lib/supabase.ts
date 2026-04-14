@@ -159,7 +159,7 @@ function stripAuthParamsFromCurrentUrl() {
     nextHash ? `#${nextHash}` : ""
   }`;
 
-  window.history.replaceState({}, "", nextUrl);
+  window.history.replaceState(window.history.state, "", nextUrl);
 }
 
 export async function createSessionFromUrl(url: string) {
@@ -167,34 +167,36 @@ export async function createSessionFromUrl(url: string) {
     return null;
   }
 
-  const params = getAuthParamsFromUrl(url);
-  const authError = params.get("error");
-  const authErrorDescription = params.get("error_description");
-  const accessToken = params.get("access_token");
-  const refreshToken = params.get("refresh_token");
+  try {
+    const params = getAuthParamsFromUrl(url);
+    const authError = params.get("error");
+    const authErrorDescription = params.get("error_description");
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
 
-  if (authError || authErrorDescription) {
-    throw new Error(
-      `Supabase auth callback failed: ${authError ?? "unknown_error"}${
-        authErrorDescription ? ` - ${authErrorDescription}` : ""
-      }`,
-    );
+    if (authError || authErrorDescription) {
+      throw new Error(
+        `Supabase auth callback failed: ${authError ?? "unknown_error"}${
+          authErrorDescription ? ` - ${authErrorDescription}` : ""
+        }`,
+      );
+    }
+
+    if (!accessToken || !refreshToken) {
+      return null;
+    }
+
+    const { data, error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return data.session;
+  } finally {
+    stripAuthParamsFromCurrentUrl();
   }
-
-  if (!accessToken || !refreshToken) {
-    return null;
-  }
-
-  const { data, error } = await supabase.auth.setSession({
-    access_token: accessToken,
-    refresh_token: refreshToken,
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  stripAuthParamsFromCurrentUrl();
-
-  return data.session;
 }

@@ -85,6 +85,14 @@ function mapRemoteProfileToAthleteProfile(remoteProfile: RemoteProfile): Athlete
   };
 }
 
+function getSessionKey(session: AuthSession | null) {
+  if (!session) {
+    return null;
+  }
+
+  return `${session.source}:${session.userId}`;
+}
+
 export function AppProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<AppState>({
     session: null,
@@ -320,10 +328,10 @@ export function AppProvider({ children }: PropsWithChildren) {
 
   const saveProfileWithSync = async (profile: AthleteProfile, errorMessage: string) => {
     const initiatingSession = stateRef.current.session;
+    const initiatingSessionKey = getSessionKey(initiatingSession);
 
     if (initiatingSession?.source !== "supabase") {
       return {
-        initiatingSession,
         nextProfile: profile,
       };
     }
@@ -332,25 +340,18 @@ export function AppProvider({ children }: PropsWithChildren) {
       setSyncStatus("syncing");
       const remoteProfile = await repository.saveProfile(profile, initiatingSession);
 
-      if (stateRef.current.session !== initiatingSession) {
-        return {
-          initiatingSession,
-          nextProfile: null,
-        };
+      if (getSessionKey(stateRef.current.session) !== initiatingSessionKey) {
+        throw new Error("Session changed during saveProfileWithSync.");
       }
 
       setSyncStatus("idle");
 
       return {
-        initiatingSession,
         nextProfile: mapRemoteProfileToAthleteProfile(remoteProfile),
       };
     } catch (error) {
-      if (stateRef.current.session !== initiatingSession) {
-        return {
-          initiatingSession,
-          nextProfile: null,
-        };
+      if (getSessionKey(stateRef.current.session) !== initiatingSessionKey) {
+        throw new Error("Session changed during saveProfileWithSync.");
       }
 
       setSyncStatus("error");
@@ -380,11 +381,7 @@ export function AppProvider({ children }: PropsWithChildren) {
         }));
       },
       async completeOnboarding(profile) {
-        const { initiatingSession, nextProfile } = await saveProfileWithSync(profile, "Profile sync failed.");
-
-        if (nextProfile === null || stateRef.current.session !== initiatingSession) {
-          return;
-        }
+        const { nextProfile } = await saveProfileWithSync(profile, "Profile sync failed.");
 
         setState((current) => ({
           ...current,
@@ -393,14 +390,7 @@ export function AppProvider({ children }: PropsWithChildren) {
         }));
       },
       async updateProfile(profile) {
-        const { initiatingSession, nextProfile } = await saveProfileWithSync(
-          profile,
-          "Profile update failed.",
-        );
-
-        if (nextProfile === null || stateRef.current.session !== initiatingSession) {
-          return;
-        }
+        const { nextProfile } = await saveProfileWithSync(profile, "Profile update failed.");
 
         setState((current) => ({
           ...current,
