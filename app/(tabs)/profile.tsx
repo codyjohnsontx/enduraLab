@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import {
@@ -69,6 +70,7 @@ export default function ProfileScreen() {
           {syncError ? <Text style={styles.helper}>Sync failed, please try again.</Text> : null}
         </Card>
 
+        <SecondaryButton label="Edit profile" onPress={() => router.push("/profile/edit")} />
         <SecondaryButton label="Reset profile and start over" onPress={() => void resetAll()} />
         <SecondaryButton label="Sign out" onPress={() => void signOut()} />
       </ScrollView>

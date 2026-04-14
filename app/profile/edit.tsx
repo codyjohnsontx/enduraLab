@@ -10,6 +10,7 @@ import {
   Pill,
   PrimaryButton,
   Screen,
+  SecondaryButton,
   SectionTitle,
 } from "@/components/ui";
 import { colors, spacing } from "@/constants/theme";
@@ -27,15 +28,23 @@ import {
 import { useAppState } from "@/providers/app-provider";
 import { Sport } from "@/types/domain";
 
-export default function OnboardingScreen() {
-  const { session, completeOnboarding } = useAppState();
+export default function EditProfileScreen() {
+  const { session, profile, updateProfile } = useAppState();
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const { control, handleSubmit, watch, setValue } = useForm<ProfileFormValues>({
-    defaultValues: getDefaultProfileFormValues(),
+  const { control, handleSubmit, reset, setValue, watch } = useForm<ProfileFormValues>({
+    defaultValues: getDefaultProfileFormValues(profile),
   });
 
   const primarySport = watch("primarySport");
   const secondarySports = watch("secondarySports");
+
+  if (!session) {
+    return <Redirect href="/auth" />;
+  }
+
+  if (!profile) {
+    return <Redirect href="/onboarding" />;
+  }
 
   const toggleSecondarySport = (sport: Sport) => {
     const current = secondarySports ?? [];
@@ -47,56 +56,37 @@ export default function OnboardingScreen() {
     setSubmitError(null);
 
     try {
-      await completeOnboarding(buildAthleteProfile(parsed));
-
-      router.replace("/(tabs)");
+      await updateProfile(buildAthleteProfile(parsed));
+      router.back();
     } catch (error) {
-      console.error("Onboarding persistence failed", error);
-      setSubmitError("Setup could not be saved. Please try again.");
+      console.error("Profile update failed", error);
+      setSubmitError("Profile could not be saved. Please try again.");
     }
   });
-
-  if (!session) {
-    return <Redirect href="/auth" />;
-  }
 
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
         <FadeInView delay={40}>
-          <View style={styles.hero}>
-            <Text style={styles.brand}>Endura Lab</Text>
-            <SectionTitle
-              eyebrow="Setup"
-              title="Performance-first training setup"
-              subtitle="Pick your sport, training frequency, and weight-conscious goals. The app will seed a six-week block built for output, not size."
-            />
-          </View>
+          <SectionTitle
+            eyebrow="Profile"
+            title="Edit training profile"
+            subtitle="Keep the synced profile aligned with your current sport focus, weight, and constraints."
+          />
         </FadeInView>
 
-        <FadeInView delay={120}>
+        <FadeInView delay={100}>
           <Card style={styles.formCard}>
-            <View style={styles.sectionBlock}>
-              <Text style={styles.blockTitle}>Account</Text>
-              <Text style={styles.blockSubtitle}>
-                Keep the intake light for now. Sync comes later.
-              </Text>
-            </View>
+            <Text style={styles.groupLabel}>Account email</Text>
+            <Text style={styles.readOnlyValue}>{profile.email}</Text>
+            <Text style={styles.helper}>
+              Email comes from auth. Profile edits here only change training data.
+            </Text>
+          </Card>
+        </FadeInView>
 
-            <Controller
-              control={control}
-              name="email"
-              render={({ field }) => (
-                <Field
-                  label="Email"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  keyboardType="email-address"
-                  placeholder="athlete@example.com"
-                />
-              )}
-            />
-
+        <FadeInView delay={160}>
+          <Card style={styles.formCard}>
             <Controller
               control={control}
               name="bodyweightKg"
@@ -110,17 +100,6 @@ export default function OnboardingScreen() {
                 />
               )}
             />
-          </Card>
-        </FadeInView>
-
-        <FadeInView delay={190}>
-          <Card style={styles.formCard}>
-            <View style={styles.sectionBlock}>
-              <Text style={styles.blockTitle}>Training profile</Text>
-              <Text style={styles.blockSubtitle}>
-                One primary sport, secondary context only.
-              </Text>
-            </View>
 
             <Controller
               control={control}
@@ -218,15 +197,8 @@ export default function OnboardingScreen() {
           </Card>
         </FadeInView>
 
-        <FadeInView delay={260}>
+        <FadeInView delay={220}>
           <Card style={styles.formCard}>
-            <View style={styles.sectionBlock}>
-              <Text style={styles.blockTitle}>Limits and class details</Text>
-              <Text style={styles.blockSubtitle}>
-                Keep this concise so the plan stays athlete-specific.
-              </Text>
-            </View>
-
             {primarySport === "bjj" ? (
               <Controller
                 control={control}
@@ -257,7 +229,14 @@ export default function OnboardingScreen() {
             />
 
             {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
-            <PrimaryButton label="Build my plan" onPress={submit} />
+            <PrimaryButton label="Save profile" onPress={submit} />
+            <SecondaryButton
+              label="Reset form"
+              onPress={() => {
+                setSubmitError(null);
+                reset(getDefaultProfileFormValues(profile));
+              }}
+            />
           </Card>
         </FadeInView>
       </ScrollView>
@@ -270,34 +249,8 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.md,
   },
-  hero: {
-    gap: 8,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-  },
-  brand: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-  },
   formCard: {
     gap: spacing.md,
-  },
-  sectionBlock: {
-    gap: 4,
-  },
-  blockTitle: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-  },
-  blockSubtitle: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 20,
   },
   group: {
     gap: spacing.sm,
@@ -314,10 +267,18 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.sm,
   },
+  helper: {
+    color: colors.textMuted,
+    lineHeight: 20,
+  },
+  readOnlyValue: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: "700",
+  },
   submitError: {
     color: colors.danger,
     fontSize: 13,
     lineHeight: 20,
-    marginBottom: spacing.sm,
   },
 });

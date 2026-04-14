@@ -1,6 +1,8 @@
+import * as Linking from "expo-linking";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { createClient } from "@supabase/supabase-js";
+import { Platform } from "react-native";
 
 import { env } from "@/lib/env";
 
@@ -50,13 +52,89 @@ const secureStorage = {
   },
 };
 
+const webStorage = {
+  async getItem(key: string) {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    return window.localStorage.getItem(key);
+  },
+  async setItem(key: string, value: string) {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(key, value);
+  },
+  async removeItem(key: string) {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.removeItem(key);
+  },
+};
+
+const authStorage = Platform.OS === "web" ? webStorage : secureStorage;
+
 export const supabase = env.hasSupabase
   ? createClient(env.supabaseUrl!, env.supabaseAnonKey!, {
       auth: {
-        storage: secureStorage,
+        storage: authStorage,
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
       },
     })
   : null;
+
+export function getMagicLinkRedirectUrl() {
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined") {
+      return `${window.location.origin}/`;
+    }
+
+    return "/";
+  }
+
+  return Linking.createURL("/auth/callback", { scheme: "enduralab" });
+}
+
+function getAuthParamsFromUrl(url: string) {
+  const queryIndex = url.indexOf("?");
+  const hashIndex = url.indexOf("#");
+  const serializedParams =
+    hashIndex >= 0
+      ? url.slice(hashIndex + 1)
+      : queryIndex >= 0
+        ? url.slice(queryIndex + 1)
+        : "";
+
+  return new URLSearchParams(serializedParams);
+}
+
+export async function createSessionFromUrl(url: string) {
+  if (!supabase) {
+    return null;
+  }
+
+  const params = getAuthParamsFromUrl(url);
+  const accessToken = params.get("access_token");
+  const refreshToken = params.get("refresh_token");
+
+  if (!accessToken || !refreshToken) {
+    return null;
+  }
+
+  const { data, error } = await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data.session;
+}

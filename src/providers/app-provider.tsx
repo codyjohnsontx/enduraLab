@@ -8,9 +8,11 @@ import {
   useRef,
   useState,
 } from "react";
+import { AppState as NativeAppState, Linking, Platform } from "react-native";
 
 import { defaultAppState, loadStoredState, persistState } from "@/lib/storage";
 import { createRepository } from "@/lib/repositories";
+import { createSessionFromUrl, supabase } from "@/lib/supabase";
 import {
   AppState,
   AthleteProfile,
@@ -39,6 +41,7 @@ type AppContextValue = AppState & {
   requestMagicLink: (email: string) => Promise<{ sent: boolean; mode: RepositoryMode }>;
   startLocalPreview: (email: string) => Promise<void>;
   completeOnboarding: (profile: AthleteProfile) => Promise<void>;
+  updateProfile: (profile: AthleteProfile) => Promise<void>;
   logWorkout: (payload: CompleteWorkoutInput) => Promise<void>;
   resetAll: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -46,6 +49,26 @@ type AppContextValue = AppState & {
 
 const AppContext = createContext<AppContextValue | null>(null);
 const repository = createRepository();
+const BOOTSTRAP_TIMEOUT_MS = 5000;
+
+async function withTimeout<T>(promise: Promise<T>, fallback: T, label: string) {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timeoutId = setTimeout(() => {
+      console.warn(`Endura Lab ${label} timed out after ${BOOTSTRAP_TIMEOUT_MS}ms`);
+      resolve(fallback);
+    }, BOOTSTRAP_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
 
 export function AppProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<AppState>({
@@ -70,6 +93,61 @@ export function AppProvider({ children }: PropsWithChildren) {
       console.error("Endura Lab sync error", syncError);
     }
   }, [syncError]);
+
+  useEffect(() => {
+    if (!supabase) {
+      return;
+    }
+
+    const syncSessionFromUrl = async (url: string) => {
+      try {
+        await createSessionFromUrl(url);
+      } catch (error) {
+        console.error("Endura Lab auth callback failed", error);
+        setSyncError("Sign-in could not be completed. Please try again.");
+      }
+    };
+
+    void (async () => {
+      const initialUrl = await Linking.getInitialURL();
+
+      if (initialUrl) {
+        await syncSessionFromUrl(initialUrl);
+      }
+    })();
+
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      void syncSessionFromUrl(url);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase || Platform.OS === "web") {
+      return;
+    }
+
+    const supabaseClient = supabase;
+
+    supabaseClient.auth.startAutoRefresh();
+
+    const subscription = NativeAppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        supabaseClient.auth.startAutoRefresh();
+        return;
+      }
+
+      supabaseClient.auth.stopAutoRefresh();
+    });
+
+    return () => {
+      subscription.remove();
+      supabaseClient.auth.stopAutoRefresh();
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -104,10 +182,11 @@ export function AppProvider({ children }: PropsWithChildren) {
       };
 
       try {
-        const [remoteProfile, remoteWorkoutLogs] = await Promise.all([
-          repository.loadProfile(session.userId),
-          repository.loadWorkoutLogs(session.userId),
-        ]);
+        const [remoteProfile, remoteWorkoutLogs] = await withTimeout(
+          Promise.all([repository.loadProfile(session.userId), repository.loadWorkoutLogs(session.userId)]),
+          [null, []],
+          "remote sync",
+        );
 
         if (!isCurrentSync(token)) {
           return null;
@@ -146,8 +225,8 @@ export function AppProvider({ children }: PropsWithChildren) {
     };
 
     (async () => {
-      const storedState = await loadStoredState();
-      const session = await repository.getSession();
+      const storedState = await withTimeout(loadStoredState(), defaultAppState, "state restore");
+      const session = await withTimeout(repository.getSession(), null, "session restore");
 
       if (!active) {
         return;
@@ -260,6 +339,52 @@ export function AppProvider({ children }: PropsWithChildren) {
 
             setSyncStatus("error");
             setSyncError(error instanceof Error ? error.message : "Profile sync failed.");
+            throw error;
+          }
+        }
+
+        if (stateRef.current.session !== initiatingSession) {
+          return;
+        }
+
+        setState((current) => ({
+          ...current,
+          profile: nextProfile,
+          onboardingCompleted: true,
+        }));
+      },
+      async updateProfile(profile) {
+        let nextProfile = profile;
+        const initiatingSession = stateRef.current.session;
+
+        if (initiatingSession?.source === "supabase") {
+          try {
+            setSyncStatus("syncing");
+            const remoteProfile = await repository.saveProfile(profile, initiatingSession);
+
+            if (stateRef.current.session !== initiatingSession) {
+              return;
+            }
+
+            nextProfile = {
+              email: remoteProfile.email,
+              primarySport: remoteProfile.primarySport,
+              secondarySports: remoteProfile.secondarySports,
+              experienceLevel: remoteProfile.experienceLevel,
+              trainingDays: remoteProfile.trainingDays,
+              goalFocus: remoteProfile.goalFocus,
+              bodyweightKg: remoteProfile.bodyweightKg,
+              bjjWeightClass: remoteProfile.bjjWeightClass,
+              injuryNotes: remoteProfile.injuryNotes,
+            };
+            setSyncStatus("idle");
+          } catch (error) {
+            if (stateRef.current.session !== initiatingSession) {
+              return;
+            }
+
+            setSyncStatus("error");
+            setSyncError(error instanceof Error ? error.message : "Profile update failed.");
             throw error;
           }
         }
