@@ -34,7 +34,7 @@ export function getDefaultProfileFormValues(profile?: AthleteProfile | null): Pr
     experienceLevel: profile?.experienceLevel ?? "foundation",
     goalFocus: profile?.goalFocus ?? "strength_to_weight",
     bodyweightKg: profile?.bodyweightKg ?? 75,
-    secondarySports: profile?.secondarySports.length ? profile.secondarySports : ["bjj"],
+    secondarySports: profile?.secondarySports ?? ["bjj"],
     bjjWeightClass: profile?.bjjWeightClass ?? "",
     injuryNotes: profile?.injuryNotes ?? "",
   };
@@ -56,9 +56,7 @@ export function buildAthleteProfile(values: ProfileFormValues): AthleteProfile {
     experienceLevel: values.experienceLevel,
     goalFocus: values.goalFocus,
     bodyweightKg: values.bodyweightKg,
-    secondarySports: values.secondarySports.filter(
-      (sport): sport is Sport => sport !== values.primarySport,
-    ),
+    secondarySports: values.secondarySports.filter((sport) => sport !== values.primarySport),
     bjjWeightClass: values.bjjWeightClass,
     injuryNotes: values.injuryNotes,
   };

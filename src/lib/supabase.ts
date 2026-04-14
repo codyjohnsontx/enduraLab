@@ -114,14 +114,72 @@ function getAuthParamsFromUrl(url: string) {
   return new URLSearchParams(serializedParams);
 }
 
+function stripAuthParamsFromCurrentUrl() {
+  if (Platform.OS !== "web" || typeof window === "undefined") {
+    return;
+  }
+
+  const currentUrl = new URL(window.location.href);
+  const hashParams = new URLSearchParams(currentUrl.hash.startsWith("#") ? currentUrl.hash.slice(1) : "");
+  const queryParams = currentUrl.searchParams;
+  const authKeys = [
+    "access_token",
+    "refresh_token",
+    "expires_at",
+    "expires_in",
+    "token_type",
+    "type",
+    "provider_token",
+    "provider_refresh_token",
+    "error",
+    "error_code",
+    "error_description",
+  ];
+
+  let changed = false;
+
+  authKeys.forEach((key) => {
+    if (hashParams.has(key)) {
+      hashParams.delete(key);
+      changed = true;
+    }
+
+    if (queryParams.has(key)) {
+      queryParams.delete(key);
+      changed = true;
+    }
+  });
+
+  if (!changed) {
+    return;
+  }
+
+  const nextHash = hashParams.toString();
+  const nextUrl = `${currentUrl.pathname}${queryParams.toString() ? `?${queryParams.toString()}` : ""}${
+    nextHash ? `#${nextHash}` : ""
+  }`;
+
+  window.history.replaceState({}, "", nextUrl);
+}
+
 export async function createSessionFromUrl(url: string) {
   if (!supabase) {
     return null;
   }
 
   const params = getAuthParamsFromUrl(url);
+  const authError = params.get("error");
+  const authErrorDescription = params.get("error_description");
   const accessToken = params.get("access_token");
   const refreshToken = params.get("refresh_token");
+
+  if (authError || authErrorDescription) {
+    throw new Error(
+      `Supabase auth callback failed: ${authError ?? "unknown_error"}${
+        authErrorDescription ? ` - ${authErrorDescription}` : ""
+      }`,
+    );
+  }
 
   if (!accessToken || !refreshToken) {
     return null;
@@ -135,6 +193,8 @@ export async function createSessionFromUrl(url: string) {
   if (error) {
     throw error;
   }
+
+  stripAuthParamsFromCurrentUrl();
 
   return data.session;
 }

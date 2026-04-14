@@ -52,15 +52,15 @@ export default function EditProfileScreen() {
   };
 
   const submit = handleSubmit(async (values) => {
-    const parsed = profileSchema.parse(values);
     setSubmitError(null);
 
     try {
+      const parsed = profileSchema.parse(values);
       await updateProfile(buildAthleteProfile(parsed));
       router.back();
     } catch (error) {
       console.error("Profile update failed", error);
-      setSubmitError("Profile could not be saved. Please try again.");
+      setSubmitError("Profile could not be saved. Check the form and try again.");
     }
   });
 

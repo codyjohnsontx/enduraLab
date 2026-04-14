@@ -8,7 +8,7 @@ import { useAppState } from "@/providers/app-provider";
 export default function AuthCallbackScreen() {
   const { session, authReady, syncError } = useAppState();
 
-  if (authReady && session) {
+  if (authReady && session && !syncError) {
     return <Redirect href="/" />;
   }
 
@@ -21,7 +21,7 @@ export default function AuthCallbackScreen() {
           title="Finishing sign-in"
           subtitle={
             syncError
-              ? "The callback reached the app, but session creation failed. Try requesting a new magic link."
+              ? "The callback reached the app, but remote sync failed. Try refreshing or requesting a new magic link."
               : "Endura Lab is completing your Supabase session and restoring your account."
           }
         />

@@ -18,6 +18,7 @@ import {
   AthleteProfile,
   AuthSession,
   ReadinessInput,
+  RemoteProfile,
   RepositoryMode,
   SyncStatus,
   WorkoutLog,
@@ -70,6 +71,20 @@ async function withTimeout<T>(promise: Promise<T>, fallback: T, label: string) {
   }
 }
 
+function mapRemoteProfileToAthleteProfile(remoteProfile: RemoteProfile): AthleteProfile {
+  return {
+    email: remoteProfile.email,
+    primarySport: remoteProfile.primarySport,
+    secondarySports: remoteProfile.secondarySports,
+    experienceLevel: remoteProfile.experienceLevel,
+    trainingDays: remoteProfile.trainingDays,
+    goalFocus: remoteProfile.goalFocus,
+    bodyweightKg: remoteProfile.bodyweightKg,
+    bjjWeightClass: remoteProfile.bjjWeightClass,
+    injuryNotes: remoteProfile.injuryNotes,
+  };
+}
+
 export function AppProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<AppState>({
     session: null,
@@ -83,6 +98,7 @@ export function AppProvider({ children }: PropsWithChildren) {
   const [syncError, setSyncError] = useState<string | null>(null);
   const stateRef = useRef(state);
   const syncCounterRef = useRef(0);
+  const processedAuthUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     stateRef.current = state;
@@ -99,7 +115,15 @@ export function AppProvider({ children }: PropsWithChildren) {
       return;
     }
 
+    let active = true;
+
     const syncSessionFromUrl = async (url: string) => {
+      if (!active || processedAuthUrlRef.current === url) {
+        return;
+      }
+
+      processedAuthUrlRef.current = url;
+
       try {
         await createSessionFromUrl(url);
       } catch (error) {
@@ -108,20 +132,27 @@ export function AppProvider({ children }: PropsWithChildren) {
       }
     };
 
+    let subscription: ReturnType<typeof Linking.addEventListener> | null = null;
+
     void (async () => {
       const initialUrl = await Linking.getInitialURL();
 
       if (initialUrl) {
         await syncSessionFromUrl(initialUrl);
       }
+
+      if (!active) {
+        return;
+      }
+
+      subscription = Linking.addEventListener("url", ({ url }) => {
+        void syncSessionFromUrl(url);
+      });
     })();
 
-    const subscription = Linking.addEventListener("url", ({ url }) => {
-      void syncSessionFromUrl(url);
-    });
-
     return () => {
-      subscription.remove();
+      active = false;
+      subscription?.remove();
     };
   }, []);
 
@@ -287,6 +318,47 @@ export function AppProvider({ children }: PropsWithChildren) {
     persistState(state);
   }, [hydrated, state]);
 
+  const saveProfileWithSync = async (profile: AthleteProfile, errorMessage: string) => {
+    const initiatingSession = stateRef.current.session;
+
+    if (initiatingSession?.source !== "supabase") {
+      return {
+        initiatingSession,
+        nextProfile: profile,
+      };
+    }
+
+    try {
+      setSyncStatus("syncing");
+      const remoteProfile = await repository.saveProfile(profile, initiatingSession);
+
+      if (stateRef.current.session !== initiatingSession) {
+        return {
+          initiatingSession,
+          nextProfile: null,
+        };
+      }
+
+      setSyncStatus("idle");
+
+      return {
+        initiatingSession,
+        nextProfile: mapRemoteProfileToAthleteProfile(remoteProfile),
+      };
+    } catch (error) {
+      if (stateRef.current.session !== initiatingSession) {
+        return {
+          initiatingSession,
+          nextProfile: null,
+        };
+      }
+
+      setSyncStatus("error");
+      setSyncError(error instanceof Error ? error.message : errorMessage);
+      throw error;
+    }
+  };
+
   const value = useMemo<AppContextValue>(
     () => ({
       ...state,
@@ -308,42 +380,9 @@ export function AppProvider({ children }: PropsWithChildren) {
         }));
       },
       async completeOnboarding(profile) {
-        let nextProfile = profile;
-        const initiatingSession = stateRef.current.session;
+        const { initiatingSession, nextProfile } = await saveProfileWithSync(profile, "Profile sync failed.");
 
-        if (initiatingSession?.source === "supabase") {
-          try {
-            setSyncStatus("syncing");
-            const remoteProfile = await repository.saveProfile(profile, initiatingSession);
-
-            if (stateRef.current.session !== initiatingSession) {
-              return;
-            }
-
-            nextProfile = {
-              email: remoteProfile.email,
-              primarySport: remoteProfile.primarySport,
-              secondarySports: remoteProfile.secondarySports,
-              experienceLevel: remoteProfile.experienceLevel,
-              trainingDays: remoteProfile.trainingDays,
-              goalFocus: remoteProfile.goalFocus,
-              bodyweightKg: remoteProfile.bodyweightKg,
-              bjjWeightClass: remoteProfile.bjjWeightClass,
-              injuryNotes: remoteProfile.injuryNotes,
-            };
-            setSyncStatus("idle");
-          } catch (error) {
-            if (stateRef.current.session !== initiatingSession) {
-              return;
-            }
-
-            setSyncStatus("error");
-            setSyncError(error instanceof Error ? error.message : "Profile sync failed.");
-            throw error;
-          }
-        }
-
-        if (stateRef.current.session !== initiatingSession) {
+        if (nextProfile === null || stateRef.current.session !== initiatingSession) {
           return;
         }
 
@@ -354,49 +393,18 @@ export function AppProvider({ children }: PropsWithChildren) {
         }));
       },
       async updateProfile(profile) {
-        let nextProfile = profile;
-        const initiatingSession = stateRef.current.session;
+        const { initiatingSession, nextProfile } = await saveProfileWithSync(
+          profile,
+          "Profile update failed.",
+        );
 
-        if (initiatingSession?.source === "supabase") {
-          try {
-            setSyncStatus("syncing");
-            const remoteProfile = await repository.saveProfile(profile, initiatingSession);
-
-            if (stateRef.current.session !== initiatingSession) {
-              return;
-            }
-
-            nextProfile = {
-              email: remoteProfile.email,
-              primarySport: remoteProfile.primarySport,
-              secondarySports: remoteProfile.secondarySports,
-              experienceLevel: remoteProfile.experienceLevel,
-              trainingDays: remoteProfile.trainingDays,
-              goalFocus: remoteProfile.goalFocus,
-              bodyweightKg: remoteProfile.bodyweightKg,
-              bjjWeightClass: remoteProfile.bjjWeightClass,
-              injuryNotes: remoteProfile.injuryNotes,
-            };
-            setSyncStatus("idle");
-          } catch (error) {
-            if (stateRef.current.session !== initiatingSession) {
-              return;
-            }
-
-            setSyncStatus("error");
-            setSyncError(error instanceof Error ? error.message : "Profile update failed.");
-            throw error;
-          }
-        }
-
-        if (stateRef.current.session !== initiatingSession) {
+        if (nextProfile === null || stateRef.current.session !== initiatingSession) {
           return;
         }
 
         setState((current) => ({
           ...current,
           profile: nextProfile,
-          onboardingCompleted: true,
         }));
       },
       async logWorkout(payload) {
@@ -460,7 +468,7 @@ export function AppProvider({ children }: PropsWithChildren) {
         });
       },
     }),
-    [authReady, hydrated, state, syncError, syncStatus],
+    [authReady, hydrated, saveProfileWithSync, state, syncError, syncStatus],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
