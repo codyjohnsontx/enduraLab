@@ -47,19 +47,19 @@ Use an EAS development build for Android. Expo Go is not enough for the custom s
 eas login
 ```
 
-2. Build and install the Android development client:
+1. Build and install the Android development client:
 
 ```bash
 eas build --profile development --platform android
 ```
 
-3. Start Metro for the dev client:
+1. Start Metro for the dev client:
 
 ```bash
 npm run start:dev-client
 ```
 
-4. Open the installed development build on the Android device and connect it to the running Metro server.
+1. Open the installed development build on the Android device and connect it to the running Metro server.
 
 The Android application id for this repo is `com.enduralab.app`.
 
