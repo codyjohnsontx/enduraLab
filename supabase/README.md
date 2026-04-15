@@ -84,4 +84,4 @@ Suggested smoke test:
 - Training plan content is still seeded in-app in this phase.
 - Only user profile and workout logs are intended to sync remotely.
 - Local preview mode remains available when env vars are absent.
-- For local web testing, use a history-fallback server so auth callback returns resolve back into the app shell.
+- For local web testing, use a history-fallback server so auth callback routes resolve back into the app shell.
