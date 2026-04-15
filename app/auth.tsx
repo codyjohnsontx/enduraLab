@@ -18,14 +18,25 @@ export default function AuthScreen() {
   const { session, repositoryMode, requestMagicLink, startLocalPreview } = useAppState();
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [isSendingMagicLink, setIsSendingMagicLink] = useState(false);
 
   if (session) {
     return <Redirect href="/" />;
   }
 
   const handleMagicLink = async () => {
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail) {
+      setMessage("Enter your email address to receive a magic link.");
+      return;
+    }
+
+    setIsSendingMagicLink(true);
+    setMessage("Sending magic link...");
+
     try {
-      const result = await requestMagicLink(email.trim());
+      const result = await requestMagicLink(trimmedEmail);
 
       if (result.sent) {
         setMessage("Magic link sent. Open the email on this device to finish sign-in.");
@@ -35,7 +46,17 @@ export default function AuthScreen() {
       setMessage("Supabase is not connected yet. Use local preview mode for now.");
     } catch (error) {
       console.error("Magic link request failed", error);
-      setMessage("Magic link could not be sent. Check your Supabase setup and try again.");
+      const errorMessage = error instanceof Error ? error.message : "Magic link request failed.";
+
+      if (/email rate limit exceeded/i.test(errorMessage)) {
+        setMessage("Too many login emails were requested. Wait a bit, then try again.");
+      } else if (/security purposes|after \d+ seconds/i.test(errorMessage)) {
+        setMessage("Magic link already requested. Wait about a minute, then try once more.");
+      } else {
+        setMessage("Magic link could not be sent. Check your Supabase setup and try again.");
+      }
+    } finally {
+      setIsSendingMagicLink(false);
     }
   };
 
@@ -66,8 +87,16 @@ export default function AuthScreen() {
               keyboardType="email-address"
               placeholder="you@enduralab.app"
             />
-            <PrimaryButton label="Send magic link" onPress={() => void handleMagicLink()} />
-            <SecondaryButton label="Use local preview mode" onPress={() => void handleLocalPreview()} />
+            <PrimaryButton
+              label={isSendingMagicLink ? "Sending magic link..." : "Send magic link"}
+              onPress={() => void handleMagicLink()}
+              disabled={isSendingMagicLink}
+            />
+            <SecondaryButton
+              label="Use local preview mode"
+              onPress={() => void handleLocalPreview()}
+              disabled={isSendingMagicLink}
+            />
             <View style={styles.metaWrap}>
               <Text style={styles.metaLabel}>Repository mode</Text>
               <Text style={styles.metaValue}>{repositoryMode}</Text>

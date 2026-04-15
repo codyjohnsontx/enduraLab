@@ -7,7 +7,7 @@ import {
   Text,
   TextInput,
   View,
-  ViewStyle,
+  type ViewStyle,
 } from "react-native";
 
 import { colors, radii, spacing } from "@/constants/theme";
@@ -204,12 +204,18 @@ export function Field({
 export function PrimaryButton({
   label,
   onPress,
+  disabled,
 }: {
   label: string;
   onPress: () => void;
+  disabled?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.primaryButton}>
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.primaryButton, disabled ? styles.buttonDisabled : undefined]}
+    >
       <Text style={styles.primaryButtonLabel}>{label}</Text>
     </Pressable>
   );
@@ -218,12 +224,18 @@ export function PrimaryButton({
 export function SecondaryButton({
   label,
   onPress,
+  disabled,
 }: {
   label: string;
   onPress: () => void;
+  disabled?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.secondaryButton}>
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.secondaryButton, disabled ? styles.buttonDisabled : undefined]}
+    >
       <Text style={styles.secondaryButtonLabel}>{label}</Text>
     </Pressable>
   );
@@ -361,6 +373,9 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     paddingVertical: 15,
     alignItems: "center",
+  },
+  buttonDisabled: {
+    opacity: 0.55,
   },
   primaryButtonLabel: {
     color: "#FFFFFF",
