@@ -8,6 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "lint:style": "stylelint \"global.css\"",
     "test": "jest --runInBand",
     "test:watch": "jest --watch"
   },

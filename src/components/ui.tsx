@@ -309,6 +309,9 @@ function ButtonBase({
     <Pressable
       disabled={disabled}
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
+      accessibilityLabel={label}
       className={cn(buttonVariants({ variant, disabled }), className)}
     >
       <Text className={buttonLabelVariants({ variant })}>{label}</Text>
