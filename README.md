@@ -2,7 +2,7 @@
 
 ## UI stack
 
-This app now uses a NativeWind-based component foundation to support a `react-native-reusables` style migration path without rewriting the whole app at once.
+This app now uses a NativeWind-based component foundation to support a `react-native-reusables`-style migration path without rewriting the whole app at once.
 
 - Tailwind config lives in `tailwind.config.js`
 - global styles live in `global.css`

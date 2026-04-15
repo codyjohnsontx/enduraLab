@@ -13,6 +13,7 @@ import {
   type ViewStyle,
 } from "react-native";
 
+import { sharedColors } from "@/lib/colors";
 import { cn } from "@/lib/utils";
 import { ReadinessLevel } from "@/types/domain";
 
@@ -276,7 +277,7 @@ export function Field({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#7E7A8F"
+        placeholderTextColor={sharedColors.textMuted}
         keyboardType={keyboardType}
         multiline={multiline}
         className={cn(
