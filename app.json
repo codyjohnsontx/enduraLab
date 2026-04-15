@@ -9,6 +9,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "plugins": [
+      "expo-dev-client",
       "expo-router"
     ],
     "experiments": {
@@ -23,6 +24,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.enduralab.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -32,6 +34,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "03011c2b-f08b-44a6-ab44-0e8f17569979"
+      }
     }
   }
 }
