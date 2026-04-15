@@ -1,6 +1,6 @@
 import { Redirect } from "expo-router";
 import { useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 
 import {
   Card,
@@ -11,7 +11,6 @@ import {
   SecondaryButton,
   SectionTitle,
 } from "@/components/ui";
-import { colors, spacing } from "@/constants/theme";
 import { useAppState } from "@/providers/app-provider";
 
 export default function AuthScreen() {
@@ -66,26 +65,30 @@ export default function AuthScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 24 }}>
         <FadeInView delay={40}>
-          <View style={styles.hero}>
-            <Text style={styles.brand}>Endura Lab</Text>
+          <View className="gap-2 pt-6">
+            <Text className="text-[14px] font-extrabold uppercase tracking-[1.2px] text-primary">
+              Endura Lab
+            </Text>
             <SectionTitle
               eyebrow="Sign in"
               title="Train with synced identity"
-              subtitle="Magic link auth is scaffolded now. Until Supabase credentials are connected, local preview mode keeps the app usable."
+              subtitle="Magic link auth now runs on the new NativeWind-based UI foundation. Supabase remains the default path, with local preview still available as a fallback."
             />
           </View>
         </FadeInView>
 
         <FadeInView delay={110}>
-          <Card style={styles.card}>
+          <Card className="gap-md">
             <Field
               label="Email"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
               placeholder="you@enduralab.app"
+              className="gap-2"
+              labelClassName="uppercase tracking-[0.9px] text-text-soft"
             />
             <PrimaryButton
               label={isSendingMagicLink ? "Sending magic link..." : "Send magic link"}
@@ -97,57 +100,16 @@ export default function AuthScreen() {
               onPress={() => void handleLocalPreview()}
               disabled={isSendingMagicLink}
             />
-            <View style={styles.metaWrap}>
-              <Text style={styles.metaLabel}>Repository mode</Text>
-              <Text style={styles.metaValue}>{repositoryMode}</Text>
+            <View className="gap-1 border-t border-line pt-sm">
+              <Text className="text-[11px] font-bold uppercase tracking-[1px] text-text-soft">
+                Repository mode
+              </Text>
+              <Text className="text-[15px] font-bold text-text">{repositoryMode}</Text>
             </View>
-            {message ? <Text style={styles.message}>{message}</Text> : null}
+            {message ? <Text className="leading-[21px] text-text-muted">{message}</Text> : null}
           </Card>
         </FadeInView>
       </ScrollView>
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  content: {
-    padding: spacing.md,
-    gap: spacing.lg,
-  },
-  hero: {
-    gap: 8,
-    paddingTop: spacing.lg,
-  },
-  brand: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-  },
-  card: {
-    gap: spacing.md,
-  },
-  metaWrap: {
-    gap: 4,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-  },
-  metaLabel: {
-    color: colors.textSoft,
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    fontWeight: "700",
-  },
-  metaValue: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  message: {
-    color: colors.textMuted,
-    lineHeight: 21,
-  },
-});
