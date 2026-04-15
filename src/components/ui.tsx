@@ -1,34 +1,92 @@
+import { cva, type VariantProps } from "class-variance-authority";
 import { PropsWithChildren, useEffect, useRef } from "react";
 import {
   Animated,
   Easing,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
+  type StyleProp,
+  type TextInputProps,
+  type TextStyle,
   type ViewStyle,
 } from "react-native";
 
-import { colors, radii, spacing } from "@/constants/theme";
+import { cn } from "@/lib/utils";
 import { ReadinessLevel } from "@/types/domain";
 
-export function Screen({ children }: PropsWithChildren) {
-  return <View style={styles.screen}>{children}</View>;
+const buttonVariants = cva("items-center justify-center rounded-md py-[15px]", {
+  variants: {
+    variant: {
+      primary: "bg-primary",
+      secondary: "border border-line bg-canvas",
+    },
+    disabled: {
+      true: "opacity-55",
+      false: "",
+    },
+  },
+  defaultVariants: {
+    variant: "primary",
+    disabled: false,
+  },
+});
+
+const buttonLabelVariants = cva("text-base font-bold", {
+  variants: {
+    variant: {
+      primary: "text-white",
+      secondary: "text-text",
+    },
+  },
+  defaultVariants: {
+    variant: "primary",
+  },
+});
+
+const readinessVariants = cva("self-start rounded-pill px-[10px] py-[7px]", {
+  variants: {
+    level: {
+      green: "bg-success",
+      yellow: "bg-warning",
+      red: "bg-danger",
+    },
+  },
+});
+
+export function Screen({
+  children,
+  className,
+  style,
+}: PropsWithChildren<{ className?: string; style?: StyleProp<ViewStyle> }>) {
+  return (
+    <View className={cn("flex-1 bg-background", className)} style={style}>
+      {children}
+    </View>
+  );
 }
 
 export function Card({
   children,
+  className,
   style,
-}: PropsWithChildren<{ style?: ViewStyle }>) {
-  return <View style={[styles.card, style]}>{children}</View>;
+}: PropsWithChildren<{ className?: string; style?: StyleProp<ViewStyle> }>) {
+  return (
+    <View
+      className={cn("rounded-md border border-line bg-canvas p-md shadow-card", className)}
+      style={style}
+    >
+      {children}
+    </View>
+  );
 }
 
 export function FadeInView({
   children,
   delay = 0,
   style,
-}: PropsWithChildren<{ delay?: number; style?: ViewStyle }>) {
+}: PropsWithChildren<{ delay?: number; style?: StyleProp<ViewStyle> }>) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
 
@@ -62,16 +120,22 @@ export function SectionTitle({
   eyebrow,
   title,
   subtitle,
+  className,
 }: {
   eyebrow?: string;
   title: string;
   subtitle?: string;
+  className?: string;
 }) {
   return (
-    <View style={styles.section}>
-      {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
+    <View className={cn("gap-[5px]", className)}>
+      {eyebrow ? (
+        <Text className="text-[11px] font-bold uppercase tracking-[1.25px] text-text-soft">
+          {eyebrow}
+        </Text>
+      ) : null}
+      <Text className="text-[32px] font-extrabold tracking-tightish text-text">{title}</Text>
+      {subtitle ? <Text className="text-sm leading-[21px] text-text-muted">{subtitle}</Text> : null}
     </View>
   );
 }
@@ -80,17 +144,23 @@ export function Pill({
   label,
   selected,
   onPress,
+  className,
 }: {
   label: string;
   selected?: boolean;
   onPress?: () => void;
+  className?: string;
 }) {
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.pill, selected ? styles.pillSelected : undefined]}
+      className={cn(
+        "rounded-pill border border-line bg-canvas px-[14px] py-[9px]",
+        selected && "border-primary bg-primary",
+        className,
+      )}
     >
-      <Text style={[styles.pillLabel, selected ? styles.pillLabelSelected : undefined]}>
+      <Text className={cn("text-[13px] font-semibold text-text", selected && "text-white")}>
         {label}
       </Text>
     </Pressable>
@@ -101,17 +171,19 @@ export function MetricStrip({
   label,
   value,
   helper,
+  className,
 }: {
   label: string;
   value: string;
   helper?: string;
+  className?: string;
 }) {
   return (
-    <View style={styles.metricStrip}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <View style={styles.metricValueWrap}>
-        <Text style={styles.metricValue}>{value}</Text>
-        {helper ? <Text style={styles.metricHelper}>{helper}</Text> : null}
+    <View className={cn("min-w-[148px] flex-1 gap-1 border-b border-line py-3", className)}>
+      <Text className="text-[11px] font-medium uppercase tracking-[1px] text-text-soft">{label}</Text>
+      <View className="gap-[2px]">
+        <Text className="text-[20px] font-extrabold tracking-metric text-text">{value}</Text>
+        {helper ? <Text className="text-xs text-text-muted">{helper}</Text> : null}
       </View>
     </View>
   );
@@ -121,18 +193,20 @@ export function ListRow({
   title,
   subtitle,
   trailing,
+  className,
 }: {
   title: string;
   subtitle?: string;
   trailing?: string;
+  className?: string;
 }) {
   return (
-    <View style={styles.listRow}>
-      <View style={styles.listTextWrap}>
-        <Text style={styles.listTitle}>{title}</Text>
-        {subtitle ? <Text style={styles.listSubtitle}>{subtitle}</Text> : null}
+    <View className={cn("flex-row items-center justify-between gap-sm border-b border-line py-[13px]", className)}>
+      <View className="flex-1 gap-[3px]">
+        <Text className="text-[15px] font-bold text-text">{title}</Text>
+        {subtitle ? <Text className="text-[13px] text-text-muted">{subtitle}</Text> : null}
       </View>
-      {trailing ? <Text style={styles.listTrailing}>{trailing}</Text> : null}
+      {trailing ? <Text className="text-[13px] font-bold text-primary">{trailing}</Text> : null}
     </View>
   );
 }
@@ -141,16 +215,18 @@ export function StatTile({
   label,
   value,
   helper,
+  className,
 }: {
   label: string;
   value: string;
   helper?: string;
+  className?: string;
 }) {
   return (
-    <Card style={styles.statTile}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
-      {helper ? <Text style={styles.statHelper}>{helper}</Text> : null}
+    <Card className={cn("min-w-[140px] flex-1 gap-1 py-3", className)}>
+      <Text className="text-[11px] uppercase tracking-[1px] text-text-soft">{label}</Text>
+      <Text className="text-[28px] font-extrabold tracking-tightish text-text">{value}</Text>
+      {helper ? <Text className="text-xs text-text-muted">{helper}</Text> : null}
     </Card>
   );
 }
@@ -158,14 +234,16 @@ export function StatTile({
 export function LabelValue({
   label,
   value,
+  className,
 }: {
   label: string;
   value: string;
+  className?: string;
 }) {
   return (
-    <View style={styles.labelValue}>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value}>{value}</Text>
+    <View className={cn("gap-1", className)}>
+      <Text className="text-xs font-semibold text-text-muted">{label}</Text>
+      <Text className="text-base leading-[22px] text-text">{value}</Text>
     </View>
   );
 }
@@ -177,297 +255,80 @@ export function Field({
   placeholder,
   keyboardType,
   multiline,
+  className,
+  inputClassName,
+  labelClassName,
 }: {
   label: string;
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
-  keyboardType?: "default" | "email-address" | "numeric";
+  keyboardType?: TextInputProps["keyboardType"];
   multiline?: boolean;
+  className?: string;
+  inputClassName?: string;
+  labelClassName?: string;
 }) {
   return (
-    <View style={styles.fieldWrap}>
-      <Text style={styles.label}>{label}</Text>
+    <View className={cn("gap-1.5", className)}>
+      <Text className={cn("text-xs font-semibold text-text-muted", labelClassName)}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
+        placeholderTextColor="#7E7A8F"
         keyboardType={keyboardType}
         multiline={multiline}
-        style={[styles.input, multiline ? styles.inputMultiline : undefined]}
+        className={cn(
+          "rounded-md border border-line bg-canvas px-[14px] py-[14px] text-base text-text",
+          multiline && "min-h-24 pt-[14px]",
+          inputClassName,
+        )}
+        style={multiline ? ({ textAlignVertical: "top" } satisfies TextStyle) : undefined}
       />
     </View>
   );
 }
 
-export function PrimaryButton({
-  label,
-  onPress,
-  disabled,
-}: {
+type ButtonProps = {
   label: string;
   onPress: () => void;
   disabled?: boolean;
-}) {
+  className?: string;
+};
+
+function ButtonBase({
+  label,
+  onPress,
+  disabled,
+  variant,
+  className,
+}: ButtonProps & VariantProps<typeof buttonVariants>) {
   return (
     <Pressable
       disabled={disabled}
       onPress={onPress}
-      style={[styles.primaryButton, disabled ? styles.buttonDisabled : undefined]}
+      className={cn(buttonVariants({ variant, disabled }), className)}
     >
-      <Text style={styles.primaryButtonLabel}>{label}</Text>
+      <Text className={buttonLabelVariants({ variant })}>{label}</Text>
     </Pressable>
   );
 }
 
-export function SecondaryButton({
-  label,
-  onPress,
-  disabled,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      disabled={disabled}
-      onPress={onPress}
-      style={[styles.secondaryButton, disabled ? styles.buttonDisabled : undefined]}
-    >
-      <Text style={styles.secondaryButtonLabel}>{label}</Text>
-    </Pressable>
-  );
+export function PrimaryButton(props: ButtonProps) {
+  return <ButtonBase {...props} variant="primary" />;
+}
+
+export function SecondaryButton(props: ButtonProps) {
+  return <ButtonBase {...props} variant="secondary" />;
 }
 
 export function ReadinessPill({ level }: { level: ReadinessLevel }) {
   return (
-    <View
-      style={[
-        styles.readinessPill,
-        level === "green"
-          ? styles.green
-          : level === "yellow"
-            ? styles.yellow
-            : styles.red,
-      ]}
-    >
-      <Text style={styles.readinessText}>{level.toUpperCase()}</Text>
+    <View className={readinessVariants({ level })}>
+      <Text className="text-[11px] font-extrabold tracking-[0.8px] text-white">
+        {level.toUpperCase()}
+      </Text>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  card: {
-    backgroundColor: colors.canvas,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.line,
-    shadowColor: colors.shadow,
-    shadowOpacity: 1,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 1,
-  },
-  section: {
-    gap: 5,
-  },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.textSoft,
-    textTransform: "uppercase",
-    letterSpacing: 1.25,
-  },
-  sectionTitle: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: colors.text,
-    letterSpacing: -0.8,
-  },
-  sectionSubtitle: {
-    color: colors.textMuted,
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  pill: {
-    borderRadius: radii.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.canvas,
-  },
-  pillSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  pillLabel: {
-    color: colors.text,
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  pillLabelSelected: {
-    color: "#FFFFFF",
-  },
-  statTile: {
-    flex: 1,
-    minWidth: 140,
-    gap: 4,
-    paddingVertical: 12,
-  },
-  statLabel: {
-    color: colors.textSoft,
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  statValue: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: "800",
-    letterSpacing: -0.8,
-  },
-  statHelper: {
-    color: colors.textMuted,
-    fontSize: 12,
-  },
-  labelValue: {
-    gap: 4,
-  },
-  label: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  value: {
-    color: colors.text,
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  fieldWrap: {
-    gap: 6,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.canvas,
-    color: colors.text,
-    borderRadius: radii.md,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    fontSize: 16,
-  },
-  inputMultiline: {
-    minHeight: 96,
-    textAlignVertical: "top",
-  },
-  primaryButton: {
-    backgroundColor: colors.primary,
-    borderRadius: radii.md,
-    paddingVertical: 15,
-    alignItems: "center",
-  },
-  buttonDisabled: {
-    opacity: 0.55,
-  },
-  primaryButtonLabel: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  secondaryButton: {
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radii.md,
-    paddingVertical: 15,
-    alignItems: "center",
-    backgroundColor: colors.canvas,
-  },
-  secondaryButtonLabel: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  readinessPill: {
-    borderRadius: radii.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    alignSelf: "flex-start",
-  },
-  readinessText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-  },
-  metricStrip: {
-    flex: 1,
-    minWidth: 148,
-    paddingVertical: 12,
-    gap: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
-  metricLabel: {
-    color: colors.textSoft,
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  metricValueWrap: {
-    gap: 2,
-  },
-  metricValue: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-  },
-  metricHelper: {
-    color: colors.textMuted,
-    fontSize: 12,
-  },
-  listRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-    paddingVertical: 13,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
-  listTextWrap: {
-    flex: 1,
-    gap: 3,
-  },
-  listTitle: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  listSubtitle: {
-    color: colors.textMuted,
-    fontSize: 13,
-  },
-  listTrailing: {
-    color: colors.primary,
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  green: {
-    backgroundColor: colors.success,
-  },
-  yellow: {
-    backgroundColor: colors.warning,
-  },
-  red: {
-    backgroundColor: colors.danger,
-  },
-});
