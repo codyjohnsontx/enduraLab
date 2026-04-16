@@ -1,10 +1,14 @@
 import { router } from "expo-router";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 
+import { KeyboardAwareScrollView } from "@/components/keyboard-aware-scroll-view";
 import {
   Card,
+  Field,
   LabelValue,
   Pill,
+  PrimaryButton,
   Screen,
   SecondaryButton,
   SectionTitle,
@@ -13,15 +17,54 @@ import { colors, spacing } from "@/constants/theme";
 import { useAppState } from "@/providers/app-provider";
 
 export default function ProfileScreen() {
-  const { profile, repositoryMode, syncStatus, syncError, resetAll, signOut } = useAppState();
+  const {
+    profile,
+    repositoryMode,
+    syncStatus,
+    syncError,
+    resetAll,
+    signOut,
+    updatePassword,
+  } = useAppState();
+  const [password, setPassword] = useState("");
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   if (!profile) {
     return <Screen />;
   }
 
+  const handlePasswordUpdate = async () => {
+    if (password.length < 6) {
+      setPasswordMessage("Password must be at least 6 characters.");
+      return;
+    }
+
+    if (password !== passwordConfirmation) {
+      setPasswordMessage("Passwords do not match.");
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    setPasswordMessage("Saving password...");
+
+    try {
+      await updatePassword(password);
+      setPassword("");
+      setPasswordConfirmation("");
+      setPasswordMessage("Password saved. You can now sign in with email and password.");
+    } catch (error) {
+      console.error("Password update failed", error);
+      setPasswordMessage("Password could not be saved. Try again.");
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.content}>
+      <KeyboardAwareScrollView contentContainerStyle={styles.content}>
         <SectionTitle
           eyebrow="Profile"
           title="Endura Lab settings"
@@ -70,10 +113,45 @@ export default function ProfileScreen() {
           {syncError ? <Text style={styles.helper}>Sync failed, please try again.</Text> : null}
         </Card>
 
+        {repositoryMode === "supabase" ? (
+          <Card style={styles.card}>
+            <Text style={styles.cardTitle}>Password login</Text>
+            <Text style={styles.helper}>
+              Set a password so you can sign back in without waiting for another magic link.
+            </Text>
+            <Field
+              label="New password"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="At least 6 characters"
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+              textContentType="newPassword"
+            />
+            <Field
+              label="Confirm password"
+              value={passwordConfirmation}
+              onChangeText={setPasswordConfirmation}
+              placeholder="Repeat password"
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+              textContentType="newPassword"
+            />
+            {passwordMessage ? <Text style={styles.helper}>{passwordMessage}</Text> : null}
+            <PrimaryButton
+              label={isUpdatingPassword ? "Saving password..." : "Save password"}
+              onPress={() => void handlePasswordUpdate()}
+              disabled={isUpdatingPassword}
+            />
+          </Card>
+        ) : null}
+
         <SecondaryButton label="Edit profile" onPress={() => router.push("/profile/edit")} />
         <SecondaryButton label="Reset profile and start over" onPress={() => void resetAll()} />
         <SecondaryButton label="Sign out" onPress={() => void signOut()} />
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }

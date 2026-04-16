@@ -69,6 +69,18 @@ describe("AppProvider", () => {
         return () => undefined;
       }),
       signInWithMagicLink: jest.fn(async () => ({ mode: "supabase" as const, sent: true })),
+      signInWithPassword: jest.fn(async (email: string) => ({
+        session: {
+          userId: "password-user",
+          email,
+          source: "supabase" as const,
+        },
+      })),
+      signUpWithPassword: jest.fn(async () => ({
+        session: null,
+        emailConfirmationRequired: true,
+      })),
+      updatePassword: jest.fn(async () => undefined),
       startLocalPreviewSession: jest.fn(async (email: string) => ({
         userId: `preview-${email}`,
         email,
@@ -170,6 +182,106 @@ describe("AppProvider", () => {
 
     expect(screen.getValue().session).toBeNull();
     expect(screen.getValue().onboardingCompleted).toBe(false);
+    await screen.unmount();
+  });
+
+  it("signs in with password and restores remote profile state", async () => {
+    const passwordSession: AuthSession = {
+      userId: "password-user",
+      email: "athlete@enduralab.app",
+      source: "supabase",
+    };
+    const screen = await renderProvider({
+      session: null,
+      remoteProfile: toRemoteProfile(createProfile(passwordSession), passwordSession),
+    });
+
+    await screen.act(async () => {
+      await screen.getValue().signInWithPassword("athlete@enduralab.app", "password123");
+    });
+    await screen.flush();
+
+    expect(screen.repository.signInWithPassword).toHaveBeenCalledWith(
+      "athlete@enduralab.app",
+      "password123",
+    );
+    expect(screen.repository.getSession).toHaveBeenCalledTimes(2);
+    expect(screen.getValue().session).toEqual({
+      userId: "password-user",
+      email: "athlete@enduralab.app",
+      source: "supabase",
+    });
+    expect(screen.getValue().profile).toEqual(createProfile(passwordSession));
+    expect(screen.getValue().onboardingCompleted).toBe(true);
+    expect(screen.repository.loadProfile).toHaveBeenCalledWith("password-user");
+    await screen.unmount();
+  });
+
+  it("does not expose signed-in auth changes until remote state is restored", async () => {
+    const nextSession: AuthSession = {
+      userId: "user-auth-change",
+      email: "athlete@enduralab.app",
+      source: "supabase",
+    };
+    const deferred = createDeferred<RemoteProfile | null>();
+    const screen = await renderProvider({
+      session: null,
+      saveProfileImpl: undefined,
+    });
+    screen.repository.loadProfile.mockImplementationOnce(() => deferred.promise);
+
+    await screen.act(async () => {
+      screen.emitAuthChange(nextSession);
+      await Promise.resolve();
+    });
+
+    expect(screen.getValue().session).toBeNull();
+    expect(screen.getValue().onboardingCompleted).toBe(false);
+
+    await screen.act(async () => {
+      deferred.resolve(toRemoteProfile(createProfile(nextSession), nextSession));
+      await Promise.resolve();
+    });
+    await screen.flush();
+
+    expect(screen.getValue().session).toEqual(nextSession);
+    expect(screen.getValue().profile).toEqual(createProfile(nextSession));
+    expect(screen.getValue().onboardingCompleted).toBe(true);
+    await screen.unmount();
+  });
+
+  it("surfaces password signup confirmation requirements", async () => {
+    const screen = await renderProvider({ session: null });
+
+    let result!: { emailConfirmationRequired: boolean };
+    await screen.act(async () => {
+      result = await screen.getValue().signUpWithPassword("athlete@enduralab.app", "password123");
+    });
+    await screen.flush();
+
+    expect(screen.repository.signUpWithPassword).toHaveBeenCalledWith(
+      "athlete@enduralab.app",
+      "password123",
+    );
+    expect(result).toEqual({ emailConfirmationRequired: true });
+    expect(screen.getValue().session).toBeNull();
+    await screen.unmount();
+  });
+
+  it("updates password through the repository", async () => {
+    const session: AuthSession = {
+      userId: "user-password",
+      email: "athlete@enduralab.app",
+      source: "supabase",
+    };
+    const screen = await renderProvider({ session });
+
+    await screen.act(async () => {
+      await screen.getValue().updatePassword("password123");
+    });
+    await screen.flush();
+
+    expect(screen.repository.updatePassword).toHaveBeenCalledWith("password123");
     await screen.unmount();
   });
 

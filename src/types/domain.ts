@@ -99,6 +99,11 @@ export type AuthSession = {
   source: RepositoryMode;
 };
 
+export type PasswordAuthResult = {
+  session: AuthSession | null;
+  emailConfirmationRequired?: boolean;
+};
+
 export type RemoteProfile = AthleteProfile & {
   userId: string;
   updatedAt: string;
@@ -122,6 +127,9 @@ export type AppDataRepository = {
   getSession: () => Promise<AuthSession | null>;
   subscribeToAuthChanges: (listener: (session: AuthSession | null) => void) => () => void;
   signInWithMagicLink: (email: string) => Promise<{ mode: RepositoryMode; sent: boolean }>;
+  signInWithPassword: (email: string, password: string) => Promise<PasswordAuthResult>;
+  signUpWithPassword: (email: string, password: string) => Promise<PasswordAuthResult>;
+  updatePassword: (password: string) => Promise<void>;
   startLocalPreviewSession: (email: string) => Promise<AuthSession>;
   signOut: () => Promise<void>;
   loadProfile: (userId: string) => Promise<RemoteProfile | null>;

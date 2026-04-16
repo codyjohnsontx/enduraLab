@@ -40,6 +40,12 @@ type AppContextValue = AppState & {
   syncStatus: SyncStatus;
   syncError: string | null;
   requestMagicLink: (email: string) => Promise<{ sent: boolean; mode: RepositoryMode }>;
+  signInWithPassword: (email: string, password: string) => Promise<void>;
+  signUpWithPassword: (
+    email: string,
+    password: string,
+  ) => Promise<{ emailConfirmationRequired: boolean }>;
+  updatePassword: (password: string) => Promise<void>;
   startLocalPreview: (email: string) => Promise<void>;
   completeOnboarding: (profile: AthleteProfile) => Promise<void>;
   updateProfile: (profile: AthleteProfile) => Promise<void>;
@@ -51,6 +57,16 @@ type AppContextValue = AppState & {
 const AppContext = createContext<AppContextValue | null>(null);
 const repository = createRepository();
 const BOOTSTRAP_TIMEOUT_MS = 5000;
+
+type SyncRemoteStateOptions = {
+  session: AuthSession | null;
+  storedState: AppState;
+  repository: typeof repository;
+  isCurrentSync: (token: number) => boolean;
+  nextToken: () => number;
+  setSyncStatus: (status: SyncStatus) => void;
+  setSyncError: (error: string | null) => void;
+};
 
 async function withTimeout<T>(promise: Promise<T>, fallback: T, label: string) {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -83,6 +99,72 @@ function mapRemoteProfileToAthleteProfile(remoteProfile: RemoteProfile): Athlete
     bjjWeightClass: remoteProfile.bjjWeightClass,
     injuryNotes: remoteProfile.injuryNotes,
   };
+}
+
+async function syncRemoteState({
+  session,
+  storedState,
+  repository,
+  isCurrentSync,
+  nextToken,
+  setSyncStatus,
+  setSyncError,
+}: SyncRemoteStateOptions) {
+  const token = nextToken();
+
+  if (!repository.isConfigured) {
+    return {
+      ...storedState,
+      session,
+    };
+  }
+
+  if (!session) {
+    return {
+      ...defaultAppState,
+      session: null,
+    };
+  }
+
+  if (isCurrentSync(token)) {
+    setSyncStatus("syncing");
+    setSyncError(null);
+  }
+
+  const baseState: AppState = {
+    ...defaultAppState,
+    session,
+  };
+
+  try {
+    const [remoteProfile, remoteWorkoutLogs] = await withTimeout(
+      Promise.all([repository.loadProfile(session.userId), repository.loadWorkoutLogs(session.userId)]),
+      [null, []],
+      "remote sync",
+    );
+
+    if (!isCurrentSync(token)) {
+      return null;
+    }
+
+    setSyncStatus("idle");
+
+    return {
+      ...baseState,
+      profile: remoteProfile ? mapRemoteProfileToAthleteProfile(remoteProfile) : null,
+      onboardingCompleted: Boolean(remoteProfile),
+      workoutLogs: remoteWorkoutLogs,
+    };
+  } catch (error) {
+    if (!isCurrentSync(token)) {
+      return null;
+    }
+
+    setSyncStatus("error");
+    setSyncError(error instanceof Error ? error.message : "Failed to load remote data.");
+
+    return baseState;
+  }
 }
 
 function getSessionKey(session: AuthSession | null) {
@@ -192,76 +274,17 @@ export function AppProvider({ children }: PropsWithChildren) {
     let active = true;
 
     const isCurrentSync = (token: number) => active && syncCounterRef.current === token;
-
-    const syncRemoteState = async (session: AuthSession | null, storedState: AppState) => {
-      const token = ++syncCounterRef.current;
-
-      if (!repository.isConfigured) {
-        return {
-          ...storedState,
-          session,
-        };
-      }
-
-      if (!session) {
-        return {
-          ...defaultAppState,
-          session: null,
-        };
-      }
-
-      if (isCurrentSync(token)) {
-        setSyncStatus("syncing");
-        setSyncError(null);
-      }
-
-      const baseState: AppState = {
-        ...defaultAppState,
+    const nextToken = () => ++syncCounterRef.current;
+    const runSyncRemoteState = (session: AuthSession | null, storedState: AppState) =>
+      syncRemoteState({
         session,
-      };
-
-      try {
-        const [remoteProfile, remoteWorkoutLogs] = await withTimeout(
-          Promise.all([repository.loadProfile(session.userId), repository.loadWorkoutLogs(session.userId)]),
-          [null, []],
-          "remote sync",
-        );
-
-        if (!isCurrentSync(token)) {
-          return null;
-        }
-
-        setSyncStatus("idle");
-
-        return {
-          ...baseState,
-          profile: remoteProfile
-            ? {
-                email: remoteProfile.email,
-                primarySport: remoteProfile.primarySport,
-                secondarySports: remoteProfile.secondarySports,
-                experienceLevel: remoteProfile.experienceLevel,
-                trainingDays: remoteProfile.trainingDays,
-                goalFocus: remoteProfile.goalFocus,
-                bodyweightKg: remoteProfile.bodyweightKg,
-                bjjWeightClass: remoteProfile.bjjWeightClass,
-                injuryNotes: remoteProfile.injuryNotes,
-              }
-            : null,
-          onboardingCompleted: Boolean(remoteProfile),
-          workoutLogs: remoteWorkoutLogs,
-        };
-      } catch (error) {
-        if (!isCurrentSync(token)) {
-          return null;
-        }
-
-        setSyncStatus("error");
-        setSyncError(error instanceof Error ? error.message : "Failed to load remote data.");
-
-        return baseState;
-      }
-    };
+        storedState,
+        repository,
+        isCurrentSync,
+        nextToken,
+        setSyncStatus,
+        setSyncError,
+      });
 
     (async () => {
       const storedState = await withTimeout(loadStoredState(), defaultAppState, "state restore");
@@ -271,7 +294,7 @@ export function AppProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      const nextState = await syncRemoteState(session, storedState);
+      const nextState = await runSyncRemoteState(session, storedState);
 
       if (!active || !nextState) {
         return;
@@ -289,17 +312,16 @@ export function AppProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      setState(() => ({
-        ...defaultAppState,
-        session,
-      }));
-
       if (!session) {
+        setState({
+          ...defaultAppState,
+          session: null,
+        });
         return;
       }
 
       void (async () => {
-        const syncedState = await syncRemoteState(session, {
+        const syncedState = await runSyncRemoteState(session, {
           ...stateRef.current,
           session,
         });
@@ -360,6 +382,28 @@ export function AppProvider({ children }: PropsWithChildren) {
     }
   };
 
+  const restoreSessionState = async (session: AuthSession) => {
+    const settledSession = await repository.getSession();
+    const activeSession = settledSession ?? session;
+    const token = ++syncCounterRef.current;
+    const syncedState = await syncRemoteState({
+      session: activeSession,
+      storedState: {
+        ...stateRef.current,
+        session: activeSession,
+      },
+      repository,
+      isCurrentSync: (syncToken) => syncCounterRef.current === syncToken,
+      nextToken: () => token,
+      setSyncStatus,
+      setSyncError,
+    });
+
+    if (syncedState) {
+      setState(syncedState);
+    }
+  };
+
   const value = useMemo<AppContextValue>(
     () => ({
       ...state,
@@ -371,6 +415,28 @@ export function AppProvider({ children }: PropsWithChildren) {
       async requestMagicLink(email) {
         setSyncError(null);
         return repository.signInWithMagicLink(email);
+      },
+      async signInWithPassword(email, password) {
+        setSyncError(null);
+        const result = await repository.signInWithPassword(email, password);
+
+        if (result.session) {
+          await restoreSessionState(result.session);
+        }
+      },
+      async signUpWithPassword(email, password) {
+        setSyncError(null);
+        const result = await repository.signUpWithPassword(email, password);
+
+        if (result.session) {
+          await restoreSessionState(result.session);
+        }
+
+        return { emailConfirmationRequired: Boolean(result.emailConfirmationRequired) };
+      },
+      async updatePassword(password) {
+        setSyncError(null);
+        await repository.updatePassword(password);
       },
       async startLocalPreview(email) {
         const session = await repository.startLocalPreviewSession(email);
