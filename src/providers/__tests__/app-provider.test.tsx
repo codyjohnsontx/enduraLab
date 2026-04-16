@@ -185,8 +185,16 @@ describe("AppProvider", () => {
     await screen.unmount();
   });
 
-  it("signs in with password and stores the returned session", async () => {
-    const screen = await renderProvider({ session: null });
+  it("signs in with password and restores remote profile state", async () => {
+    const passwordSession: AuthSession = {
+      userId: "password-user",
+      email: "athlete@enduralab.app",
+      source: "supabase",
+    };
+    const screen = await renderProvider({
+      session: null,
+      remoteProfile: toRemoteProfile(createProfile(passwordSession), passwordSession),
+    });
 
     await screen.act(async () => {
       await screen.getValue().signInWithPassword("athlete@enduralab.app", "password123");
@@ -202,7 +210,9 @@ describe("AppProvider", () => {
       email: "athlete@enduralab.app",
       source: "supabase",
     });
-    expect(screen.getValue().profile).toBeNull();
+    expect(screen.getValue().profile).toEqual(createProfile(passwordSession));
+    expect(screen.getValue().onboardingCompleted).toBe(true);
+    expect(screen.repository.loadProfile).toHaveBeenCalledWith("password-user");
     await screen.unmount();
   });
 
