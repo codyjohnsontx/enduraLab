@@ -40,6 +40,12 @@ type AppContextValue = AppState & {
   syncStatus: SyncStatus;
   syncError: string | null;
   requestMagicLink: (email: string) => Promise<{ sent: boolean; mode: RepositoryMode }>;
+  signInWithPassword: (email: string, password: string) => Promise<void>;
+  signUpWithPassword: (
+    email: string,
+    password: string,
+  ) => Promise<{ emailConfirmationRequired: boolean }>;
+  updatePassword: (password: string) => Promise<void>;
   startLocalPreview: (email: string) => Promise<void>;
   completeOnboarding: (profile: AthleteProfile) => Promise<void>;
   updateProfile: (profile: AthleteProfile) => Promise<void>;
@@ -371,6 +377,40 @@ export function AppProvider({ children }: PropsWithChildren) {
       async requestMagicLink(email) {
         setSyncError(null);
         return repository.signInWithMagicLink(email);
+      },
+      async signInWithPassword(email, password) {
+        setSyncError(null);
+        const result = await repository.signInWithPassword(email, password);
+
+        if (
+          result.session &&
+          getSessionKey(stateRef.current.session) !== getSessionKey(result.session)
+        ) {
+          setState({
+            ...defaultAppState,
+            session: result.session,
+          });
+        }
+      },
+      async signUpWithPassword(email, password) {
+        setSyncError(null);
+        const result = await repository.signUpWithPassword(email, password);
+
+        if (
+          result.session &&
+          getSessionKey(stateRef.current.session) !== getSessionKey(result.session)
+        ) {
+          setState({
+            ...defaultAppState,
+            session: result.session,
+          });
+        }
+
+        return { emailConfirmationRequired: Boolean(result.emailConfirmationRequired) };
+      },
+      async updatePassword(password) {
+        setSyncError(null);
+        await repository.updatePassword(password);
       },
       async startLocalPreview(email) {
         const session = await repository.startLocalPreviewSession(email);

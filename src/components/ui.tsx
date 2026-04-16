@@ -259,6 +259,10 @@ export function Field({
   className,
   inputClassName,
   labelClassName,
+  autoCapitalize,
+  autoCorrect,
+  secureTextEntry,
+  textContentType,
 }: {
   label: string;
   value: string;
@@ -266,9 +270,13 @@ export function Field({
   placeholder?: string;
   keyboardType?: TextInputProps["keyboardType"];
   multiline?: boolean;
+  autoCapitalize?: TextInputProps["autoCapitalize"];
+  autoCorrect?: TextInputProps["autoCorrect"];
   className?: string;
   inputClassName?: string;
   labelClassName?: string;
+  secureTextEntry?: TextInputProps["secureTextEntry"];
+  textContentType?: TextInputProps["textContentType"];
 }) {
   return (
     <View className={cn("gap-1.5", className)}>
@@ -280,6 +288,10 @@ export function Field({
         placeholderTextColor={sharedColors.textMuted}
         keyboardType={keyboardType}
         multiline={multiline}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
+        secureTextEntry={secureTextEntry}
+        textContentType={textContentType}
         className={cn(
           "rounded-md border border-line bg-canvas px-[14px] py-[14px] text-base text-text",
           multiline && "min-h-24 pt-[14px]",

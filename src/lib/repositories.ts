@@ -1,7 +1,10 @@
+import type { Session } from "@supabase/supabase-js";
+
 import {
   AppDataRepository,
   AthleteProfile,
   AuthSession,
+  PasswordAuthResult,
   RemoteProfile,
   RemoteWorkoutLog,
   WorkoutLog,
@@ -167,6 +170,18 @@ function mapWorkoutRowToRemoteWorkoutLog(row: WorkoutLogRow): RemoteWorkoutLog {
   };
 }
 
+function mapSupabaseSession(session: Session): AuthSession {
+  return {
+    userId: session.user.id,
+    email: session.user.email ?? "",
+    source: "supabase",
+  };
+}
+
+function unsupportedPasswordAuth(): never {
+  throw new Error("Password auth requires Supabase to be configured.");
+}
+
 const localPreviewRepository: AppDataRepository = {
   mode: "local-preview",
   isConfigured: false,
@@ -178,6 +193,15 @@ const localPreviewRepository: AppDataRepository = {
   },
   async signInWithMagicLink() {
     return { mode: "local-preview", sent: false };
+  },
+  async signInWithPassword() {
+    unsupportedPasswordAuth();
+  },
+  async signUpWithPassword() {
+    unsupportedPasswordAuth();
+  },
+  async updatePassword() {
+    unsupportedPasswordAuth();
   },
   async startLocalPreviewSession(email: string) {
     const session: AuthSession = {
@@ -230,11 +254,7 @@ const supabaseRepository: AppDataRepository = {
       return null;
     }
 
-    return {
-      userId: session.user.id,
-      email: session.user.email ?? "",
-      source: "supabase",
-    };
+    return mapSupabaseSession(session);
   },
   subscribeToAuthChanges(listener) {
     let prevUserId: string | null = null;
@@ -282,6 +302,47 @@ const supabaseRepository: AppDataRepository = {
     }
 
     return { mode: "supabase", sent: true };
+  },
+  async signInWithPassword(email: string, password: string): Promise<PasswordAuthResult> {
+    const { data, error } = await supabase!.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      console.error("Supabase signInWithPassword failed", error);
+      throw new Error(error.message);
+    }
+
+    return {
+      session: data.session ? mapSupabaseSession(data.session) : null,
+    };
+  },
+  async signUpWithPassword(email: string, password: string): Promise<PasswordAuthResult> {
+    const { data, error } = await supabase!.auth.signUp({
+      email,
+      password,
+    });
+
+    if (error) {
+      console.error("Supabase signUpWithPassword failed", error);
+      throw new Error(error.message);
+    }
+
+    return {
+      session: data.session ? mapSupabaseSession(data.session) : null,
+      emailConfirmationRequired: !data.session,
+    };
+  },
+  async updatePassword(password: string) {
+    const { error } = await supabase!.auth.updateUser({
+      password,
+    });
+
+    if (error) {
+      console.error("Supabase updatePassword failed", error);
+      throw new Error(error.message);
+    }
   },
   async startLocalPreviewSession(email: string) {
     const fallbackSession: AuthSession = {
