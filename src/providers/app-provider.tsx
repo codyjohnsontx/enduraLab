@@ -312,12 +312,11 @@ export function AppProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      setState(() => ({
-        ...defaultAppState,
-        session,
-      }));
-
       if (!session) {
+        setState({
+          ...defaultAppState,
+          session: null,
+        });
         return;
       }
 
@@ -384,12 +383,14 @@ export function AppProvider({ children }: PropsWithChildren) {
   };
 
   const restoreSessionState = async (session: AuthSession) => {
+    const settledSession = await repository.getSession();
+    const activeSession = settledSession ?? session;
     const token = ++syncCounterRef.current;
     const syncedState = await syncRemoteState({
-      session,
+      session: activeSession,
       storedState: {
         ...stateRef.current,
-        session,
+        session: activeSession,
       },
       repository,
       isCurrentSync: (syncToken) => syncCounterRef.current === syncToken,

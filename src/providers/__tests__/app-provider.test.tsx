@@ -205,6 +205,7 @@ describe("AppProvider", () => {
       "athlete@enduralab.app",
       "password123",
     );
+    expect(screen.repository.getSession).toHaveBeenCalledTimes(2);
     expect(screen.getValue().session).toEqual({
       userId: "password-user",
       email: "athlete@enduralab.app",
@@ -213,6 +214,39 @@ describe("AppProvider", () => {
     expect(screen.getValue().profile).toEqual(createProfile(passwordSession));
     expect(screen.getValue().onboardingCompleted).toBe(true);
     expect(screen.repository.loadProfile).toHaveBeenCalledWith("password-user");
+    await screen.unmount();
+  });
+
+  it("does not expose signed-in auth changes until remote state is restored", async () => {
+    const nextSession: AuthSession = {
+      userId: "user-auth-change",
+      email: "athlete@enduralab.app",
+      source: "supabase",
+    };
+    const deferred = createDeferred<RemoteProfile | null>();
+    const screen = await renderProvider({
+      session: null,
+      saveProfileImpl: undefined,
+    });
+    screen.repository.loadProfile.mockImplementationOnce(() => deferred.promise);
+
+    await screen.act(async () => {
+      screen.emitAuthChange(nextSession);
+      await Promise.resolve();
+    });
+
+    expect(screen.getValue().session).toBeNull();
+    expect(screen.getValue().onboardingCompleted).toBe(false);
+
+    await screen.act(async () => {
+      deferred.resolve(toRemoteProfile(createProfile(nextSession), nextSession));
+      await Promise.resolve();
+    });
+    await screen.flush();
+
+    expect(screen.getValue().session).toEqual(nextSession);
+    expect(screen.getValue().profile).toEqual(createProfile(nextSession));
+    expect(screen.getValue().onboardingCompleted).toBe(true);
     await screen.unmount();
   });
 
