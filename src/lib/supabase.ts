@@ -98,7 +98,7 @@ export function getMagicLinkRedirectUrl() {
     return "/";
   }
 
-  return Linking.createURL("/auth/callback", { scheme: "enduralab" });
+  return "enduralab://auth/callback";
 }
 
 function getAuthParamsFromUrl(url: string) {
