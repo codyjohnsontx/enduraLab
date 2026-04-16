@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Control, Controller, useForm } from "react-hook-form";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 
+import { KeyboardAwareScrollView } from "@/components/keyboard-aware-scroll-view";
 import {
   Card,
   FadeInView,
@@ -167,7 +168,7 @@ export default function WorkoutSessionScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.content}>
+      <KeyboardAwareScrollView contentContainerStyle={styles.content}>
         <FadeInView delay={40}>
           <View style={styles.header}>
             <SectionTitle
@@ -388,7 +389,7 @@ export default function WorkoutSessionScreen() {
             <PrimaryButton label="Complete session" onPress={submit} />
           </Card>
         </FadeInView>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }

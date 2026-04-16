@@ -1,8 +1,9 @@
 import { Redirect, router } from "expo-router";
 import { Controller, useForm } from "react-hook-form";
 import { useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
+import { KeyboardAwareScrollView } from "@/components/keyboard-aware-scroll-view";
 import {
   Card,
   FadeInView,
@@ -62,7 +63,7 @@ export default function OnboardingScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.content}>
+      <KeyboardAwareScrollView contentContainerStyle={styles.content}>
         <FadeInView delay={40}>
           <View style={styles.hero}>
             <Text style={styles.brand}>Endura Lab</Text>
@@ -260,7 +261,7 @@ export default function OnboardingScreen() {
             <PrimaryButton label="Build my plan" onPress={submit} />
           </Card>
         </FadeInView>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }
