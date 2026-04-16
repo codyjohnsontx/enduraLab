@@ -28,7 +28,7 @@ export function KeyboardAwareScrollView({
       style={styles.container}
     >
       <ScrollView
-        contentContainerStyle={[styles.content, contentContainerStyle]}
+        contentContainerStyle={[contentContainerStyle, styles.content]}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       >
